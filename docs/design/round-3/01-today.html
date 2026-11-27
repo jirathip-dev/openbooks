@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>openbooks · Today</title>
+<link rel="stylesheet" href="openbooks.css">
+<style>
+.today{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:calc(2 * var(--s4));align-items:start}
+.hello{margin-bottom:var(--s3)}
+.ask.hero{min-height:56px;border-width:1.5px}
+.ask.hero input{font-size:17px}
+.ask.hero .btn{min-height:53px;padding:0 var(--s4)}
+.todo a{display:grid;grid-template-columns:10px 1fr auto 16px;gap:var(--s3);align-items:center;min-height:60px;padding:var(--s2) var(--s4);border-bottom:1px solid var(--line);color:var(--fg);text-decoration:none}
+.todo a:last-child{border-bottom:0}
+.todo a[aria-selected]{background:var(--bg);box-shadow:inset 3px 0 0 var(--l)}
+.todo .t{font-size:15px;font-weight:600}
+.todo .k{width:10px;height:10px}
+.todo .ico{color:var(--mute)}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s3)}
+.tiles .card{padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:2px}
+.tiles .v{font:600 20px var(--sans);font-variant-numeric:tabular-nums lining-nums}
+.review .hd{padding:var(--s4);border-bottom:1px solid var(--line)}
+.review .amt{font:600 26px var(--sans);font-variant-numeric:tabular-nums lining-nums;margin:var(--s2) 0 0}
+.review ul{margin:0;padding:var(--s3) var(--s4) var(--s3) calc(var(--s4) + 18px);display:flex;flex-direction:column;gap:6px;font-size:14px}
+.review .why{padding:0 var(--s4) var(--s3);color:var(--mute);font-size:var(--fs-meta)}
+.review .foot{display:flex;gap:var(--s2);padding:var(--s3) var(--s4);border-top:1px solid var(--edge);background:var(--bg)}
+.review .foot .main{flex:1;min-height:var(--hit)}
+.review .foot .btn{min-height:var(--hit)}
+.review .step{display:flex;align-items:center;gap:var(--s2)}
+.review .step .sp{flex:1}
+.grab{display:none}
+@media (max-width:599px){
+  .today{display:block}
+  .tiles{grid-template-columns:1fr 1fr 1fr;gap:var(--s2)}
+  .tiles .card{padding:var(--s2)}
+  .tiles .v{font-size:14px}
+  .todo a{padding:var(--s2) var(--s3)}
+  .review{margin:var(--s4) calc(-1 * var(--s3)) 0;border-left:0;border-right:0;box-shadow:0 -8px 24px rgb(0 0 0 / .14)}
+  .grab{display:block;width:40px;height:4px;background:var(--edge);margin:var(--s2) auto 0}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-today" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11"/><path d="M2 6h12M5 1v3M11 1v3"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 16 16"><path d="M4 1h6l3 3v11H4z"/><path d="M10 1v3h3M6 8h5M6 11h5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3 3-5 6-5s6 2 6 5"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 16 16"><path d="M2 6l6-4 6 4M3 6v6M6 6v6M10 6v6M13 6v6M2 14h12"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 16 16"><path d="M2 5l6-3 6 3v7l-6 3-6-3zM2 5l6 3 6-3M8 8v7"/></symbol>
+  <symbol id="i-asset" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9"/><path d="M5 4V2h6v2"/></symbol>
+  <symbol id="i-rep" viewBox="0 0 16 16"><path d="M3 14V8M7 14V4M11 14V9M2 14h12"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+</svg>
+<div class="app">
+  <nav class="rail">
+    <div class="brand"><b>Nolla Works Co., Ltd.</b><span class="meta">Head office · THB · FY 2026</span></div>
+    <a href="#" aria-current="page"><svg class="ico"><use href="#i-today"/></svg>Today<span class="ct">2</span></a><a href="#"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-user"/></svg>Contacts</a><a href="#"><svg class="ico"><use href="#i-stock"/></svg>Inventory</a><a href="#"><svg class="ico"><use href="#i-asset"/></svg>Assets</a><a href="#"><svg class="ico"><use href="#i-rep"/></svg>Reports</a>
+    <a href="#" class="gear"><svg class="ico"><use href="#i-gear"/></svg>Setup</a>
+  </nav>
+  <main>
+
+    <div class="today">
+      <div>
+        <div class="hello"><div class="crumb">Thursday 26 November 2026</div><h1>Good morning, Mai</h1></div>
+        <div class="ask hero"><input placeholder="Ask, or tell it what happened: “Granite Steel paid us”"><span class="btn main">Ask</span></div>
+
+        <h2>To do</h2>
+        <div class="card todo">
+          <a href="#" aria-selected="true"><span class="k" style="background:var(--p)"></span><span><span class="t">2 drafts to confirm</span><br><span class="meta">A receipt and a supplier bill, prepared for you</span></span><span></span><svg class="ico"><use href="#i-chev"/></svg></a>
+          <a href="#"><span class="k" style="background:var(--r)"></span><span><span class="t">3 invoices overdue</span><br><span class="meta">Oldest 56 days · Quayle Hotel</span></span><span class="num">212,400.00</span><svg class="ico"><use href="#i-chev"/></svg></a>
+          <a href="#"><span class="k" style="background:var(--a)"></span><span><span class="t">2 bank lines to match</span><br><span class="meta">Main current · 25 Nov</span></span><span class="num">18,642.47</span><svg class="ico"><use href="#i-chev"/></svg></a>
+          <a href="#"><span class="k" style="background:var(--c)"></span><span><span class="t">Withholding tax returns due 7 Dec</span><br><span class="meta">PND 3 and PND 53 for November</span></span><span class="num">13,350.00</span><svg class="ico"><use href="#i-chev"/></svg></a>
+        </div>
+
+        <h2>Money</h2>
+        <div class="tiles">
+          <div class="card"><span class="meta">Cash</span><span class="v">1,284,530</span><span class="meta">3 bank accounts</span></div>
+          <div class="card"><span class="meta">Owed to you</span><span class="v">486,250</span><span class="meta" style="color:var(--r)">212,400 overdue</span></div>
+          <div class="card"><span class="meta">You owe</span><span class="v">164,075</span><span class="meta">5 due this week</span></div>
+        </div>
+      </div>
+
+      <aside class="card review">
+        <div class="grab"></div>
+        <div class="hd">
+          <div class="step meta"><span>Draft 1 of 2 · prepared at 09:42</span><span class="sp"></span><span>Next ›</span></div>
+          <h3 style="margin-top:var(--s2)">Receipt from Granite Steel Works</h3>
+          <div class="amt">THB 103,970.00</div>
+          <div class="meta">into Main current on 25 Nov</div>
+        </div>
+        <ul>
+          <li>Pays invoice <b>AR2610-0031</b> in full: 64,200.00</li>
+          <li>Pays 42,800.00 of <b>AR2611-0004</b>; 10,700.00 stays open</li>
+          <li>They withheld 3,000.00 tax; collect their certificate</li>
+          <li>The bank kept a 30.00 fee</li>
+        </ul>
+        <div class="why">Found from the bank line “GRANITE STEEL WORKS LTD TRF” on 25 Nov.</div>
+        <details class="reveal"><summary>Show entry<span class="meta">RV 02 Receipts</span></summary></details>
+        <div class="foot"><span class="btn quiet">Discard</span><span class="btn">Change</span><span class="btn main">Confirm</span></div>
+      </aside>
+    </div>
+
+  </main>
+</div>
+
+<nav class="tabbar"><a href="#" aria-current="page"><svg class="ico"><use href="#i-today"/></svg>Today</a><a href="#"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-plus"/></svg>New</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-more"/></svg>More</a></nav>
+</body>
+</html>

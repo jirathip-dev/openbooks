@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>openbooks · Invoices</title>
+<link rel="stylesheet" href="openbooks.css">
+<style>
+.bar{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;margin-bottom:var(--s3)}
+.search{display:flex;align-items:center;gap:var(--s2);flex:1;min-width:260px;min-height:40px;padding:0 var(--s3);border:1px solid var(--edge);background:var(--card);color:var(--mute)}
+.month{display:flex;align-items:center;gap:var(--s3);min-height:40px;padding:0 var(--s3);border:1px solid var(--edge);background:var(--card);font-weight:600}
+.month span{color:var(--mute);font-weight:400}
+.types{display:flex;gap:var(--s2);overflow-x:auto;margin-bottom:var(--s3)}
+.types a{display:flex;align-items:center;gap:6px;min-height:36px;padding:0 var(--s3);border:1px solid var(--edge);border-radius:999px;background:var(--card);color:var(--fg);text-decoration:none;white-space:nowrap}
+.types a[aria-current]{background:var(--l);border-color:var(--l);color:var(--bg);font-weight:600}
+.types a i{font-style:normal;font:500 var(--fs-meta) var(--sans);font-variant-numeric:tabular-nums lining-nums;opacity:.7}
+.docs td{vertical-align:middle;padding:var(--s3) var(--s2);font-size:14px}
+.docs th:first-child,.docs td:first-child{padding-left:var(--s4)}
+.docs th:last-child,.docs td:last-child{padding-right:var(--s4)}
+.docs .no{font:600 var(--fs) var(--sans);font-variant-numeric:tabular-nums lining-nums}
+.docs .draft{color:var(--mute);font-style:italic;font-family:var(--sans);font-weight:400}
+.docs tr.void td{color:var(--mute)}
+.docs tr.void td.num{text-decoration:line-through}
+.docs .ty{color:var(--mute)}
+.note{display:flex;gap:var(--s3);align-items:center;margin-bottom:var(--s3);font-size:var(--fs)}
+.note .sp{flex:1}
+.list{display:none}
+.more{padding:var(--s3) var(--s4);color:var(--mute);text-align:center;border-top:1px solid var(--line)}
+@media (max-width:599px){
+  table.docs{display:none}
+  .list{display:block}
+  .list a{display:grid;grid-template-columns:1fr auto;gap:2px var(--s2);padding:var(--s3);border-bottom:1px solid var(--line);color:var(--fg);text-decoration:none}
+  .list .c{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .list .a{font:600 15px var(--sans);font-variant-numeric:tabular-nums lining-nums;text-align:right}
+  .list .m{font-size:var(--fs-meta);color:var(--mute)}
+  .list a>span:last-child{justify-self:end}
+  .list a.void .a{text-decoration:line-through;color:var(--mute)}
+  .search{min-width:0;flex-basis:100%}
+  .month{flex:1;justify-content:space-between}
+  .note{flex-wrap:wrap;font-size:var(--fs-meta)}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-today" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11"/><path d="M2 6h12M5 1v3M11 1v3"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 16 16"><path d="M4 1h6l3 3v11H4z"/><path d="M10 1v3h3M6 8h5M6 11h5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3 3-5 6-5s6 2 6 5"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 16 16"><path d="M2 6l6-4 6 4M3 6v6M6 6v6M10 6v6M13 6v6M2 14h12"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 16 16"><path d="M2 5l6-3 6 3v7l-6 3-6-3zM2 5l6 3 6-3M8 8v7"/></symbol>
+  <symbol id="i-asset" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9"/><path d="M5 4V2h6v2"/></symbol>
+  <symbol id="i-rep" viewBox="0 0 16 16"><path d="M3 14V8M7 14V4M11 14V9M2 14h12"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+</svg>
+<div class="app">
+  <nav class="rail">
+    <div class="brand"><b>Nolla Works Co., Ltd.</b><span class="meta">Head office · THB · FY 2026</span></div>
+    <a href="#"><svg class="ico"><use href="#i-today"/></svg>Today<span class="ct">2</span></a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-user"/></svg>Contacts</a><a href="#"><svg class="ico"><use href="#i-stock"/></svg>Inventory</a><a href="#"><svg class="ico"><use href="#i-asset"/></svg>Assets</a><a href="#"><svg class="ico"><use href="#i-rep"/></svg>Reports</a>
+    <a href="#" class="gear"><svg class="ico"><use href="#i-gear"/></svg>Setup</a>
+  </nav>
+  <main>
+
+    <div class="head">
+      <div><h1>Documents</h1></div>
+      <span class="sp"></span>
+      <span class="btn quiet wide">Accountant view</span>
+      <span class="btn main">New ▾</span>
+    </div>
+    <div class="bar">
+      <div class="search"><svg class="ico"><use href="#i-search"/></svg>Search number, contact or amount</div>
+      <div class="month"><span>‹</span>November 2026<span>›</span></div>
+    </div>
+    <nav class="types"><a href="#">All</a><a href="#" aria-current=page>Invoices<i>6</i></a><a href="#">Bills<i>5</i></a><a href="#">Receipts<i>5</i></a><a href="#">Payments<i>5</i></a><a href="#">Journal<i>3</i></a></nav>
+    <div class="note"><span>November: 6 invoices · <b class="mono">THB 171,200.00</b> and <b class="mono">USD 8,000.00</b> open</span><span class="sp"></span><a style="color:var(--r)">3 overdue from earlier months ›</a></div>
+    <div class="card">
+      <table class="docs"><thead><tr><th>Number</th><th>Date</th><th>Customer</th><th>Due</th><th class="num">Amount</th><th class="num">Open</th><th>Status</th></tr></thead><tbody><tr><td><span class="no draft">Draft</span></td><td>26 Nov</td><td>Hollin Resort</td><td>—</td><td class="num">25,680.00</td><td class="num"></td><td><span class="st" data-k="n">Draft</span></td></tr><tr><td><span class="no">AR2611-0005</span></td><td>22 Nov</td><td>Quayle Hotel</td><td>—</td><td class="num">−5,350.00</td><td class="num"></td><td><span class="st" data-k="g">Applied</span></td></tr><tr><td><span class="no">AR2611-0004</span></td><td>13 Nov</td><td>Granite Steel Works</td><td>13 Dec</td><td class="num">53,500.00</td><td class="num">53,500.00</td><td><span class="st" data-k="n">Open</span></td></tr><tr><td><span class="no">AR2611-0003</span></td><td>11 Nov</td><td>Pellmore Cargo Ltd.</td><td>11 Dec</td><td class="num">USD 8,000.00</td><td class="num">USD 8,000.00</td><td><span class="st" data-k="n">Open</span></td></tr><tr><td><span class="no">AR2611-0002</span></td><td>4 Nov</td><td>Arcton Cold Storage</td><td>4 Dec</td><td class="num">74,900.00</td><td class="num">74,900.00</td><td><span class="st" data-k="n">Open</span></td></tr><tr><td><span class="no">AR2611-0001</span></td><td>2 Nov</td><td>Quayle Hotel</td><td>2 Dec</td><td class="num">48,150.00</td><td class="num">42,800.00</td><td><span class="st" data-k="n">Open</span></td></tr></tbody></table>
+      <div class="list"><a><span class="c">Hollin Resort</span><span class="a">25,680.00</span><span class="m">Draft · 26 Nov</span><span><span class="st" data-k="n">Draft</span></span></a><a><span class="c">Quayle Hotel</span><span class="a">−5,350.00</span><span class="m">AR2611-0005 · 22 Nov</span><span><span class="st" data-k="g">Applied</span></span></a><a><span class="c">Granite Steel Works</span><span class="a">53,500.00</span><span class="m">AR2611-0004 · 13 Nov · due 13 Dec</span><span><span class="st" data-k="n">Open</span></span></a><a><span class="c">Pellmore Cargo Ltd.</span><span class="a">USD 8,000.00</span><span class="m">AR2611-0003 · 11 Nov · due 11 Dec</span><span><span class="st" data-k="n">Open</span></span></a><a><span class="c">Arcton Cold Storage</span><span class="a">74,900.00</span><span class="m">AR2611-0002 · 4 Nov · due 4 Dec</span><span><span class="st" data-k="n">Open</span></span></a><a><span class="c">Quayle Hotel</span><span class="a">48,150.00</span><span class="m">AR2611-0001 · 2 Nov · due 2 Dec</span><span><span class="st" data-k="n">Open</span></span></a></div>
+      
+    </div>
+
+  </main>
+</div>
+
+<nav class="tabbar"><a href="#"><svg class="ico"><use href="#i-today"/></svg>Today</a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-plus"/></svg>New</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-more"/></svg>More</a></nav>
+</body>
+</html>

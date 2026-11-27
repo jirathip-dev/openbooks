@@ -1,13 +1,13 @@
 {
   "format": 2,
   "type": "default",
-  "space": 1,
-  "radius": 0,
+  "space": 0.9,
+  "radius": 0.5,
   "motion": 1,
-  "easing": "standard",
-  "surface": "solid",
+  "easing": "calm",
+  "surface": "glass",
   "fills": "tint",
   "marks": "symbols",
-  "sections": "title",
+  "sections": "quiet",
   "labels": {}
 }
