@@ -1,0 +1,8 @@
+growth = 10
+
+[cargo]
+blocks = "the scheme and style gates the web theme test runs over web/theme/"
+serde_json = "reads the web theme's JSON files in that test"
+
+[npm]
+typescript = "the type checker behind tsc --noEmit on web/ and packs/th/web/"

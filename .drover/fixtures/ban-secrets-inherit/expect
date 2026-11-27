@@ -1,0 +1,1 @@
+.github/workflows/x.yml:4: `secrets: inherit` is banned here
