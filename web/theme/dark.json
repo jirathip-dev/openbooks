@@ -1,0 +1,5 @@
+{"label":"openbooks dark","color-scheme":"dark","tokens":{
+"--bg":"#161616","--card":"#1f1f1f","--edge":"#3a3a3a","--line":"#2a2a2a","--scrim":"#00000099",
+"--fg":"#ececec","--mute":"#a3a3a3","--l":"#d6d6d6","--link":"#d6d6d6",
+"--g":"#769672","--a":"#c5a370","--r":"#bb776e","--p":"#a295bb","--c":"#6da1a5",
+"--fk-l":"#d6d6d6","--fk-p":"#b8abce","--fk-c":"#8ab9bc","--fk-g":"#9bb996","--fk-a":"#d1b184"}}

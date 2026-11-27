@@ -1,0 +1,137 @@
+frozen = [".github/workflows/ci.yml"]
+shared = ["Cargo.toml", ".drover/arch.toml", ".drover/rules.md", "README.md"]
+
+[[collect]]
+dir = "migrations"
+glob = "*.sql"
+
+[[collect]]
+dir = "templates"
+glob = "*"
+
+[[collect]]
+dir = ".gatekeeper/gates"
+glob = "*.toml"
+
+[comments]
+policy = "off"
+
+[[layer]]
+name = "core"
+paths = ["crates/openbooks-core/src/**"]
+mods = ["openbooks_core"]
+
+[[layer]]
+name = "db"
+paths = ["crates/openbooks-db/src/**"]
+mods = ["openbooks_db"]
+may_use = ["core"]
+
+[[layer]]
+name = "app"
+paths = ["crates/openbooks/src/**"]
+mods = ["openbooks"]
+may_use = ["core", "db"]
+
+[[layer]]
+name = "server"
+paths = ["crates/openbooks-server/src/**"]
+mods = ["openbooks_server"]
+may_use = ["core", "db", "app"]
+
+[[layer]]
+name = "pack"
+paths = ["packs/*/src/**"]
+mods = []
+may_use = ["core"]
+
+[[ban]]
+pattern = "self-hosted"
+paths = [".github/**"]
+reason = "CI runs on GitHub-hosted runners only: a fork's pull request must never reach a machine we own"
+comments = true
+ignore_case = true
+
+[[ban]]
+pattern = "pull_request_target"
+paths = [".github/**"]
+reason = "a fork's pull request runs with a read-only token and no secret: pull_request only"
+comments = true
+
+[[ban]]
+pattern = "secrets: inherit"
+paths = [".github/**"]
+reason = "each secret is passed by name, and never to a fork's pull request"
+comments = true
+
+[[ban]]
+pattern = "openbooks_th"
+paths = ["crates/**"]
+reason = "the suite passes with no pack installed: no crate depends on a pack"
+comments = true
+
+[[ban]]
+pattern = "delete"
+paths = ["crates/*/src/**", "packs/*/src/**", "migrations/**"]
+reason = "nothing has a delete: a wrong entry is reversed by a new one, never removed"
+comments = true
+ignore_case = true
+
+[[ban]]
+pattern = "cfg(feature"
+paths = ["crates/**", "packs/**"]
+reason = "nothing is behind a feature switch: every build has every behaviour"
+comments = true
+
+[[ban]]
+pattern = "[features]"
+paths = ["crates/**", "packs/**"]
+reason = "nothing is behind a feature switch: every build has every behaviour"
+comments = true
+
+[[ban]]
+pattern = "thai"
+paths = ["crates/**", "migrations/**", "templates/**", "web/src/**", "web/theme/**"]
+reason = "nothing names a country outside packs/: a country's words, taxes and forms live in its pack"
+comments = true
+ignore_case = true
+
+[[ban]]
+pattern = "baht"
+paths = ["crates/**", "migrations/**", "templates/**", "web/src/**", "web/theme/**"]
+reason = "nothing names a country outside packs/: a country's words, taxes and forms live in its pack"
+comments = true
+ignore_case = true
+
+[[ban]]
+pattern = "satang"
+paths = ["crates/**", "migrations/**", "templates/**", "web/src/**", "web/theme/**"]
+reason = "nothing names a country outside packs/: a country's words, taxes and forms live in its pack"
+comments = true
+ignore_case = true
+
+[[size]]
+paths = ["crates/*/src/**/*.rs", "crates/*/tests/**/*.rs", "packs/*/src/**/*.rs"]
+max_file_lines = 600
+max_fn_lines = 60
+
+[[size]]
+paths = ["web/src/**/*.ts", "packs/*/web/src/**/*.ts"]
+max_file_lines = 400
+max_fn_lines = 60
+
+[[size]]
+paths = [".drover/arch.toml"]
+max_file_lines = 400
+
+[[size]]
+paths = ["Cargo.toml"]
+max_file_lines = 80
+
+[[size]]
+paths = [".drover/rules.md"]
+max_file_lines = 30
+
+[[size]]
+paths = ["README.md"]
+max_file_lines = 80

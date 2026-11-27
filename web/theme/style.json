@@ -1,0 +1,13 @@
+{
+  "format": 2,
+  "type": "default",
+  "space": 1,
+  "radius": 0,
+  "motion": 1,
+  "easing": "standard",
+  "surface": "solid",
+  "fills": "tint",
+  "marks": "symbols",
+  "sections": "title",
+  "labels": {}
+}

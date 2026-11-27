@@ -1,0 +1,6 @@
+{
+  "name": "openbooks",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": ["web", "packs/th/web"]
+}
