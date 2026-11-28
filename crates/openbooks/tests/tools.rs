@@ -70,7 +70,9 @@ async fn books(pool: PgPool, tools: Tools) -> Res<(Openbooks<TestHost>, OrgId)> 
     openbooks_db::migrate(&pool).await?;
     let books = Openbooks::new(TestHost::new(pool)).tools(tools).build();
     books.host().sign_in(person(1, "ann@example.com")?);
-    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    let org = books
+        .create_company("Acme", Currency::new("XTS", 2)?, "none", None)
+        .await?;
     Ok((books, org))
 }
 
@@ -139,8 +141,9 @@ async fn a_tool_call_answers_fifty_rows_under_a_size_cap_and_its_cursor_reaches_
         books.add_member(org, address, Role::Viewer, None).await?;
     }
     let pages = walk(&books, org).await?;
-    let first = pages.first().map_or(0, Vec::len);
-    assert!(first < 50, "the size cap cut the first page at {first}");
+    let sizes: Vec<usize> = pages.iter().map(Vec::len).collect();
+    let cut = sizes.iter().rev().skip(1).any(|&n| n < 50);
+    assert!(cut, "no page but the last was cut by the size cap: {sizes:?}");
     let mut all: Vec<&String> = pages.iter().flatten().collect();
     let count = all.len();
     all.dedup();
