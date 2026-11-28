@@ -36,13 +36,23 @@ fn member((email, user, role): Row) -> Result<Member, sqlx::Error> {
     })
 }
 
-pub async fn create_org(db: &mut PgConnection, name: &str, base: Currency) -> Result<OrgId, sqlx::Error> {
-    let id: i64 = query_scalar("INSERT INTO ledger.org (name, base_currency) VALUES ($1, $2) RETURNING org_id")
+pub async fn create_org(db: &mut PgConnection, name: &str, base: Currency, pack: &str) -> Result<OrgId, sqlx::Error> {
+    let sql = "INSERT INTO ledger.org (name, base_currency, pack) VALUES ($1, $2, $3) RETURNING org_id";
+    let id: i64 = query_scalar(sql)
         .bind(name)
         .bind(base.code())
+        .bind(pack)
         .fetch_one(db)
         .await?;
     OrgId::new(id).map_err(refused)
+}
+
+/// The name of the pack the company keeps its books under, if there is such a company.
+pub async fn org_pack(db: &mut PgConnection, org: OrgId) -> Result<Option<String>, sqlx::Error> {
+    query_scalar("SELECT pack FROM ledger.org WHERE org_id = $1")
+        .bind(org.get())
+        .fetch_optional(db)
+        .await
 }
 
 /// Holds the company's row until the transaction ends, so member writes run one at a time; false if there is none.

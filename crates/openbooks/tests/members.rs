@@ -19,7 +19,9 @@ async fn books(pool: PgPool) -> Res<(Openbooks<TestHost>, OrgId)> {
     openbooks_db::migrate(&pool).await?;
     let books = Openbooks::new(TestHost::new(pool)).build();
     books.host().sign_in(person(1, "ann@example.com")?);
-    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    let org = books
+        .create_company("Acme", Currency::new("XTS", 2)?, "none", None)
+        .await?;
     Ok((books, org))
 }
 
@@ -40,12 +42,16 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
     let books = Openbooks::new(TestHost::new(pool.clone())).build();
     books.host().sign_in(person(1, "ann@example.com")?);
     books.host().roll_back(true);
-    books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    books
+        .create_company("Acme", Currency::new("XTS", 2)?, "none", None)
+        .await?;
     for table in ["org", "member", "audit", "event"] {
         assert_eq!(rows(&pool, table).await?, 0, "{table}");
     }
     books.host().roll_back(false);
-    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    let org = books
+        .create_company("Acme", Currency::new("XTS", 2)?, "none", None)
+        .await?;
     books.host().roll_back(true);
     books
         .add_member(org, email("bob@example.com")?, Role::Staff, None)
