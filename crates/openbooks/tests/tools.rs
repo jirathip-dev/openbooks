@@ -200,7 +200,7 @@ async fn a_packs_offered_tools_are_called_through_its_serve_and_a_write_leaves_o
     let proposed = books.call_tool(org, "propose", &[("note", "rent\u{7}\nnow")]).await?;
     assert_eq!(proposed, "\"propose rent now 1\"");
     let rows = books.audit(org, Filter::default(), None).await?.items;
-    let actions: Vec<&str> = rows[before..].iter().map(|r| r.action.as_str()).collect();
+    let actions: Vec<&str> = rows.iter().skip(before).map(|r| r.action.as_str()).collect();
     assert_eq!(actions, ["propose"]);
     assert_eq!(books.call_tool(org, "report", &[]).await?, "\"report 1\"");
     assert_eq!(books.audit(org, Filter::default(), None).await?.items.len(), before + 1);
