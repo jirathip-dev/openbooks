@@ -5,11 +5,17 @@ use sqlx::{PgConnection, query, query_as, query_scalar};
 
 use crate::refused;
 
-/// What an audit row is about: the company itself, or one member by email.
+/// What an audit row is about: the company, a member by email, an account or terms by code, a role, the dimension kinds, or a value of the kind in a slot by its code or host reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Record {
     Company,
     Member(Email),
+    Account(String),
+    AccountRole(String),
+    Dimensions,
+    Value(u16, String),
+    Synced(u16, String),
+    Terms(String),
 }
 
 impl Record {
@@ -18,6 +24,12 @@ impl Record {
         match self {
             Self::Company => "company".to_owned(),
             Self::Member(email) => format!("member:{}", email.as_str()),
+            Self::Account(code) => format!("account:{code}"),
+            Self::AccountRole(role) => format!("role:{role}"),
+            Self::Dimensions => "dimensions".to_owned(),
+            Self::Value(slot, code) => format!("value:{slot}:{code}"),
+            Self::Synced(slot, host_ref) => format!("value:{slot}:host:{host_ref}"),
+            Self::Terms(code) => format!("terms:{code}"),
         }
     }
 }
@@ -94,23 +106,63 @@ fn row((seq, id, at, user, via, action, record, detail, before, after): Row) -> 
     })
 }
 
+const ACCOUNT: &str = "SELECT (to_jsonb(a) - 'org_id' || jsonb_build_object('requires', (SELECT jsonb_agg(k.slot ORDER BY k.slot) \
+     FROM ledger.account_dimension r JOIN ledger.dimension k USING (org_id, kind_id) \
+     WHERE r.org_id = a.org_id AND r.account_id = a.account_id AND r.required AND NOT k.removed)))::text \
+     FROM ledger.account a WHERE org_id = $1 AND code = $2";
+
+const ROLE: &str = "SELECT jsonb_agg(jsonb_build_object('from', r.from_date, 'account', a.code) ORDER BY r.from_date)::text \
+     FROM ledger.account_role r JOIN ledger.account a USING (org_id, account_id) WHERE r.org_id = $1 AND r.role = $2 \
+     HAVING count(*) > 0";
+
+const DIMENSIONS: &str = "SELECT jsonb_agg(jsonb_build_object('slot', slot, 'name', name) ORDER BY slot)::text \
+     FROM ledger.dimension WHERE org_id = $1 AND NOT removed";
+
+const VALUE: &str = "SELECT (to_jsonb(v) - 'org_id')::text FROM ledger.dimension_value v \
+     JOIN ledger.dimension k ON k.org_id = v.org_id AND k.kind_id = v.kind_id AND NOT k.removed \
+     WHERE v.org_id = $1 AND k.slot = $2";
+
 /// The record's state now as JSON; none if it does not exist.
 pub async fn snapshot(db: &mut PgConnection, org: OrgId, record: &Record) -> Result<Option<String>, sqlx::Error> {
-    match record {
-        Record::Company => {
-            query_scalar("SELECT to_jsonb(o)::text FROM ledger.org o WHERE org_id = $1")
-                .bind(org.get())
-                .fetch_optional(db)
-                .await
-        }
-        Record::Member(email) => {
-            query_scalar("SELECT (to_jsonb(m) - 'org_id')::text FROM ledger.member m WHERE org_id = $1 AND email = $2")
-                .bind(org.get())
-                .bind(email.as_str())
-                .fetch_optional(db)
-                .await
-        }
-    }
+    let (sql, key, slot): (String, Option<&str>, Option<i16>) = match record {
+        Record::Company => (
+            "SELECT to_jsonb(o)::text FROM ledger.org o WHERE org_id = $1".to_owned(),
+            None,
+            None,
+        ),
+        Record::Member(email) => (
+            "SELECT (to_jsonb(m) - 'org_id')::text FROM ledger.member m WHERE org_id = $1 AND email = $2".to_owned(),
+            Some(email.as_str()),
+            None,
+        ),
+        Record::Account(code) => (ACCOUNT.to_owned(), Some(code.as_str()), None),
+        Record::AccountRole(role) => (ROLE.to_owned(), Some(role.as_str()), None),
+        Record::Dimensions => (DIMENSIONS.to_owned(), None, None),
+        Record::Value(slot, code) => (
+            format!("{VALUE} AND v.code = $3"),
+            Some(code.as_str()),
+            i16::try_from(*slot).ok(),
+        ),
+        Record::Synced(slot, host_ref) => (
+            format!("{VALUE} AND v.host_ref = $3"),
+            Some(host_ref.as_str()),
+            i16::try_from(*slot).ok(),
+        ),
+        Record::Terms(code) => (
+            "SELECT (to_jsonb(t) - 'org_id')::text FROM ledger.terms t WHERE org_id = $1 AND code = $2".to_owned(),
+            Some(code.as_str()),
+            None,
+        ),
+    };
+    let found = match (key, slot) {
+        (Some(key), Some(slot)) => query_scalar::<_, Option<String>>(&sql)
+            .bind(org.get())
+            .bind(slot)
+            .bind(key),
+        (Some(key), None) => query_scalar(&sql).bind(org.get()).bind(key),
+        (None, _) => query_scalar(&sql).bind(org.get()),
+    };
+    Ok(found.fetch_optional(db).await?.flatten())
 }
 
 pub async fn write(db: &mut PgConnection, org: OrgId, row: Audit<'_>) -> Result<(), sqlx::Error> {

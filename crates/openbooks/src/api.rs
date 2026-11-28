@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use openbooks_core::{Email, OrgId, Role, UserId, Word};
+use openbooks_core::{AccountType, Date, Email, OrgId, Role, UserId, Word};
 use openbooks_db::audit::AuditRow;
 use openbooks_db::members::Member;
 
@@ -105,6 +105,9 @@ pub struct Mount {
 pub enum Schema {
     Nothing,
     Text,
+    Flag,
+    Whole,
+    Day,
     Email,
     Id,
     Instant,
@@ -148,6 +151,30 @@ impl Shape for () {
 impl Shape for String {
     fn schema() -> Schema {
         Schema::Text
+    }
+}
+
+impl Shape for bool {
+    fn schema() -> Schema {
+        Schema::Flag
+    }
+}
+
+impl Shape for u16 {
+    fn schema() -> Schema {
+        Schema::Whole
+    }
+}
+
+impl Shape for Date {
+    fn schema() -> Schema {
+        Schema::Day
+    }
+}
+
+impl Shape for AccountType {
+    fn schema() -> Schema {
+        Schema::Words(AccountType::ALL.map(AccountType::as_str).to_vec())
     }
 }
 

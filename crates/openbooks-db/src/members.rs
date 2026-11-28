@@ -29,9 +29,11 @@ pub async fn create_org(db: &mut PgConnection, name: &str, base: Currency, pack:
         .bind(name)
         .bind(base.code())
         .bind(pack)
-        .fetch_one(db)
+        .fetch_one(&mut *db)
         .await?;
-    OrgId::new(id).map_err(refused)
+    let org = OrgId::new(id).map_err(refused)?;
+    crate::chart::add_project(db, org).await?;
+    Ok(org)
 }
 
 /// The name of the pack the company keeps its books under, if there is such a company.

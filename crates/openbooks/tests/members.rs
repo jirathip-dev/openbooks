@@ -67,7 +67,16 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
 
 #[sqlx::test(migrations = false)]
 async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_words_allow(pool: PgPool) -> Res<()> {
-    let words = [Word::Read, Word::Own, Word::Own, Word::Own, Word::Approve];
+    let (read, approve) = (Word::Read, Word::Approve);
+    let chart = [
+        read, approve, approve, read, approve, read, approve, approve, approve, read, approve, approve,
+    ];
+    let words = [
+        [read, Word::Own, Word::Own, Word::Own, approve].as_slice(),
+        &chart,
+        &[read, approve],
+    ]
+    .concat();
     assert_eq!(BOOKS.operations.iter().map(Operation::word).collect::<Vec<_>>(), words);
     let (books, org) = books(pool).await?;
     for (n, role) in (2..).zip(Role::ALL) {
