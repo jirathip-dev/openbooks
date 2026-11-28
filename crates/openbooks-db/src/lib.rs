@@ -1,11 +1,17 @@
+pub mod audit;
 pub mod events;
 pub mod members;
 
 use std::collections::BTreeSet;
 use std::fmt;
 
+use openbooks_core::Refusal;
 use sqlx::migrate::Migrator;
 use sqlx::{PgConnection, PgPool};
+
+fn refused(refusal: Refusal) -> sqlx::Error {
+    sqlx::Error::Decode(Box::new(refusal))
+}
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 

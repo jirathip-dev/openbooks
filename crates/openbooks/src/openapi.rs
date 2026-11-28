@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use openbooks_core::OrgId;
 
-use crate::api::{Field, Kind, Mount, Operation, Schema, Shape};
+use crate::api::{Field, Mount, Operation, Schema, Shape};
 
 enum Json {
     Bool(bool),
@@ -76,6 +76,7 @@ fn schema(shape: &Schema) -> Json {
         Schema::Nothing => map([]),
         Schema::Text => map([("type", text("string"))]),
         Schema::Email => map([("type", text("string")), ("format", text("email"))]),
+        Schema::Instant => map([("type", text("string")), ("format", text("date-time"))]),
         Schema::Id => map([
             ("type", text("integer")),
             ("format", text("int64")),
@@ -166,7 +167,7 @@ fn operation(op: &Operation) -> Json {
     };
     let input = op.input();
     let mut parameters = vec![parameter(&org, "path")];
-    if op.kind() == Kind::Read {
+    if op.is_read() {
         parameters.extend(input.iter().map(|f| parameter(f, "query")));
     }
     if op.is_create() {
@@ -195,7 +196,7 @@ fn operation(op: &Operation) -> Json {
         ("x-openbooks-tool", Json::Bool(op.is_tool())),
         ("parameters", Json::List(parameters)),
     ]);
-    if op.kind() != Kind::Read && !input.is_empty() {
+    if !op.is_read() && !input.is_empty() {
         json = json.with("requestBody", body("What to write.", &Schema::Object(input)));
     }
     json.with("responses", Json::Map(answers))
@@ -205,7 +206,7 @@ impl Mount {
     /// The `OpenAPI` document of this mount: each operation under the mount's `key`, with the word it needs.
     pub fn openapi(&self) -> String {
         let paths = self.operations.iter().map(|op| {
-            let method = if op.kind() == Kind::Read { "get" } else { "post" };
+            let method = if op.is_read() { "get" } else { "post" };
             let path = format!("/{}/{{org}}/{}", self.key, op.name());
             (path, map([(method, operation(op))]))
         });

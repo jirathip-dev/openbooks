@@ -16,6 +16,7 @@ pub enum Refusal {
     BadEmail,
     BadKey,
     BadOrigin,
+    BadTime,
 }
 
 impl fmt::Display for Refusal {
@@ -32,6 +33,7 @@ impl fmt::Display for Refusal {
             Self::BadEmail => f.write_str("an email has a name, an @ and a domain"),
             Self::BadKey => f.write_str("an idempotency key is 1 to 255 visible characters"),
             Self::BadOrigin => f.write_str("an origin is 1 to 255 visible characters"),
+            Self::BadTime => f.write_str("a time is from 1970 on, to the microsecond"),
         }
     }
 }

@@ -73,6 +73,7 @@ comments = true
 [[ban]]
 pattern = "delete"
 paths = ["crates/*/src/**", "packs/*/src/**", "migrations/**"]
+except = ["migrations/0004_audit.sql"]
 reason = "nothing has a delete: a wrong entry is reversed by a new one, never removed"
 comments = true
 ignore_case = true

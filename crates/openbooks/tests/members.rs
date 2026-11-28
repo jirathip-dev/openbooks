@@ -1,9 +1,11 @@
 use std::collections::BTreeSet;
+use std::time::Duration;
 
 use openbooks::testing::TestHost;
-use openbooks::{BOOKS, Error, Member, Openbooks, Operation, Scope, SignedIn, Via};
-use openbooks_core::{Currency, Email, OrgId, Origin, ProjectId, Role, UserId, Word};
-use sqlx::{PgPool, query_scalar};
+use openbooks::{AuditRow, BOOKS, Error, Filter, Host, Member, Openbooks, Operation, Record, Scope, SignedIn, Via};
+use openbooks_core::{Currency, Email, OrgId, Origin, ProjectId, Refusal, Role, UserId, Word};
+use serde_json::{Value, json};
+use sqlx::{PgPool, query_scalar, raw_sql};
 
 type Res<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -59,7 +61,7 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
 
 #[sqlx::test(migrations = false)]
 async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_words_allow(pool: PgPool) -> Res<()> {
-    let words = [Word::Read, Word::Own, Word::Own, Word::Own];
+    let words = [Word::Read, Word::Own, Word::Own, Word::Own, Word::Approve];
     assert_eq!(BOOKS.operations.iter().map(Operation::word).collect::<Vec<_>>(), words);
     let (books, org) = books(pool).await?;
     for (n, role) in (2..).zip(Role::ALL) {
@@ -216,5 +218,225 @@ async fn members_come_a_page_at_a_time_and_the_cursor_reaches_the_last(pool: PgP
     let second = books.members(org, first.next).await?;
     let emails: Vec<&str> = second.items.iter().map(|m| m.email.as_str()).collect();
     assert_eq!((emails, second.next), (vec!["m099@example.com"], None));
+    Ok(())
+}
+
+async fn log(books: &Openbooks<TestHost>, org: OrgId, filter: Filter) -> Res<Vec<AuditRow>> {
+    Ok(books.audit(org, filter, None).await?.items)
+}
+
+fn json(text: Option<&String>) -> Res<Option<Value>> {
+    Ok(text.map(|t| serde_json::from_str(t)).transpose()?)
+}
+
+fn wes(role: &str, removed: bool) -> Value {
+    json!({"email": "wes@example.com", "user_id": null, "role": role, "removed": removed})
+}
+
+async fn call(books: &Openbooks<TestHost>, org: OrgId, op: &Operation) -> Res<(Option<Value>, Option<Value>)> {
+    let address = email("wes@example.com")?;
+    match op.name() {
+        "member.add" => books.add_member(org, address, Role::Staff, None).await?,
+        "member.role" => books.change_role(org, address, Role::Viewer).await?,
+        "member.remove" => books.remove_member(org, address).await?,
+        other => return Err(format!("{other} is a declared write this walk does not call").into()),
+    }
+    Ok(match op.name() {
+        "member.add" => (None, Some(wes("staff", false))),
+        "member.role" => (Some(wes("staff", false)), Some(wes("viewer", false))),
+        _ => (Some(wes("viewer", false)), Some(wes("viewer", true))),
+    })
+}
+
+#[sqlx::test(migrations = false)]
+async fn every_declared_write_leaves_exactly_one_audit_row_with_the_record_before_and_after(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool).await?;
+    let [opened] = log(&books, org, Filter::default())
+        .await?
+        .try_into()
+        .map_err(|_| "not one row")?;
+    let company = json(opened.after.as_ref())?.ok_or("no company after")?;
+    assert_eq!(
+        (opened.action.as_str(), opened.record.as_str(), opened.before),
+        ("company.create", "company", None)
+    );
+    assert_eq!(
+        (company.get("name"), company.get("base_currency")),
+        (Some(&json!("Acme")), Some(&json!("XTS")))
+    );
+    let writes: Vec<&Operation> = BOOKS.operations.iter().filter(|op| !op.is_read()).collect();
+    assert_eq!(writes.len(), 3);
+    for op in writes {
+        let seen = log(&books, org, Filter::default()).await?.len();
+        let (before, after) = call(&books, org, op).await?;
+        let rows = log(&books, org, Filter::default()).await?;
+        assert_eq!(
+            rows.len(),
+            seen + 1,
+            "{} left {} audit rows",
+            op.name(),
+            rows.len() - seen
+        );
+        let row = rows.last().ok_or("no row")?;
+        assert_eq!(
+            (row.action.as_str(), row.record.as_str()),
+            (op.name(), "member:wes@example.com")
+        );
+        assert_eq!((json(row.before.as_ref())?, json(row.after.as_ref())?), (before, after));
+    }
+    books
+        .add_member(org, email("joe@example.com")?, Role::Staff, None)
+        .await?;
+    books.host().sign_in(person(5, "joe@example.com")?);
+    books.members(org, None).await?;
+    books.members(org, None).await?;
+    books.host().sign_in(person(1, "ann@example.com")?);
+    let rows = log(&books, org, Filter::default()).await?;
+    let joined = rows.last().ok_or("no row")?;
+    assert_eq!(
+        (rows.len(), joined.action.as_str(), joined.user.get()),
+        (6, "member.join", 5)
+    );
+    let tied = |user| json!({"email": "joe@example.com", "user_id": user, "role": "staff", "removed": false});
+    assert_eq!(
+        (json(joined.before.as_ref())?, json(joined.after.as_ref())?),
+        (Some(tied(Value::Null)), Some(tied(json!(5))))
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn the_database_refuses_any_change_to_an_audit_row_or_its_removal(pool: PgPool) -> Res<()> {
+    let _books = books(pool.clone()).await?;
+    for sql in [
+        "UPDATE ledger.audit SET detail = 'nothing happened'",
+        "DELETE FROM ledger.event; DELETE FROM ledger.audit",
+        "TRUNCATE ledger.audit CASCADE",
+    ] {
+        let refused = raw_sql(sql).execute(&pool).await.map(drop);
+        let message = refused.map_err(|e| e.as_database_error().map(|d| d.message().to_owned()));
+        assert_eq!(
+            message,
+            Err(Some("an audit row is never changed or removed".to_owned())),
+            "{sql}"
+        );
+    }
+    let kept: Vec<String> = query_scalar("SELECT detail FROM ledger.audit").fetch_all(&pool).await?;
+    assert_eq!(kept, ["Acme"]);
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn only_owners_and_accountants_read_the_log_and_never_through_an_assistant(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool).await?;
+    for (n, role) in (2..).zip(Role::ALL) {
+        let address = format!("member{n}@example.com");
+        books.host().sign_in(person(1, "ann@example.com")?);
+        books.add_member(org, email(&address)?, role, None).await?;
+        books.host().sign_in(person(n, &address)?);
+        let read = books.audit(org, Filter::default(), None).await;
+        match (role, read) {
+            (Role::Owner | Role::Accountant, Ok(page)) => {
+                let first = page.items.first().map(|row| row.action.as_str());
+                assert_eq!(first, Some("company.create"));
+            }
+            (Role::Staff | Role::Viewer, Err(Error::Forbidden { word: Word::Approve })) => {}
+            (role, read) => return Err(format!("{role:?} read the log: {read:?}").into()),
+        }
+    }
+    books.host().sign_in(SignedIn {
+        via: Via::Assistant,
+        ..person(1, "ann@example.com")?
+    });
+    let read = books.audit(org, Filter::default(), None).await;
+    assert!(
+        matches!(read, Err(Error::Forbidden { word: Word::Approve })),
+        "{read:?}"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn the_log_filters_by_record_person_and_kind_and_names_the_way_each_change_came(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool).await?;
+    books
+        .add_member(org, email("bob@example.com")?, Role::Owner, None)
+        .await?;
+    for (via, address) in [(Via::Pack, "pat@example.com"), (Via::Schedule, "sam@example.com")] {
+        books.host().sign_in(SignedIn {
+            via,
+            ..person(2, "bob@example.com")?
+        });
+        books.add_member(org, email(address)?, Role::Viewer, None).await?;
+    }
+    books.host().sign_in(person(1, "ann@example.com")?);
+    books.change_role(org, email("pat@example.com")?, Role::Staff).await?;
+    let found = async |filter| {
+        let rows = log(&books, org, filter).await?;
+        Res::Ok(
+            rows.into_iter()
+                .map(|r| format!("{} {} {}", r.action, r.via, r.record))
+                .collect::<Vec<_>>(),
+        )
+    };
+    let everything = found(Filter::default()).await?;
+    assert_eq!(
+        everything,
+        [
+            "company.create person company",
+            "member.add person member:bob@example.com",
+            "member.join pack member:bob@example.com",
+            "member.add pack member:pat@example.com",
+            "member.add schedule member:sam@example.com",
+            "member.role person member:pat@example.com",
+        ]
+    );
+    let pat = Filter {
+        record: Some(Record::Member(email("pat@example.com")?)),
+        ..Filter::default()
+    };
+    assert_eq!(
+        found(pat).await?,
+        [
+            "member.add pack member:pat@example.com",
+            "member.role person member:pat@example.com"
+        ]
+    );
+    let bob = Filter {
+        user: Some(UserId::new(2)?),
+        action: Some("member.add".to_owned()),
+        ..Filter::default()
+    };
+    assert_eq!(
+        found(bob).await?,
+        [
+            "member.add pack member:pat@example.com",
+            "member.add schedule member:sam@example.com"
+        ]
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn the_log_keeps_the_changes_in_a_time_span_and_goes_on_from_a_cursor(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool).await?;
+    books
+        .add_member(org, email("bob@example.com")?, Role::Owner, None)
+        .await?;
+    let found = async |filter| Res::Ok(log(&books, org, filter).await?.len());
+    let now = books.host().now();
+    let span = |from, until| Filter {
+        from: Some(from),
+        until: Some(until),
+        ..Filter::default()
+    };
+    assert_eq!(found(span(now, now + Duration::from_micros(1))).await?, 2);
+    assert_eq!(found(span(now - Duration::from_secs(60), now)).await?, 0);
+    let rows = log(&books, org, Filter::default()).await?;
+    let first = rows.first().ok_or("no row")?.seq.to_string();
+    let rest = books.audit(org, Filter::default(), Some(first)).await?;
+    assert_eq!((rest.items.len(), rest.next), (1, None));
+    let bad = books.audit(org, Filter::default(), Some("x".to_owned())).await;
+    assert!(matches!(bad, Err(Error::Refused(Refusal::BadId))), "{bad:?}");
     Ok(())
 }
