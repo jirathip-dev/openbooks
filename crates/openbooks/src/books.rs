@@ -4,7 +4,8 @@ use openbooks_db::books::{self, Book, NumberSeries};
 use sqlx::PgConnection;
 
 use crate::members::{PAGE, paged};
-use crate::{Error, Field, Host, Openbooks, Operation, Pack, Page, Schema, Shape};
+use crate::openapi::{Json, map, text};
+use crate::{Ask, Error, Field, Host, Openbooks, Operation, Pack, Page, Reply, Schema, Shape};
 
 pub(crate) const BOOKS_LIST: Operation =
     crate::read!("books", Word::Read, "Lists the company's five books in its order.", {} -> Page<Book>);
@@ -83,6 +84,39 @@ fn code(code: &str) -> Result<(), Error> {
     } else {
         Err(Error::BadCode(code.to_owned()))
     }
+}
+
+pub(crate) async fn serve(ask: Ask<'_>) -> Result<Reply, Error> {
+    if ask.tool == BOOKS_LIST.name() {
+        let items = books::books(ask.db, ask.org).await?;
+        return Ok(Reply::One(Json::List(items.iter().map(book).collect())));
+    }
+    let (n, after) = (i64::from(ask.rows()), ask.after()?);
+    let items = books::series(ask.db, ask.org, after.as_deref(), n).await?;
+    Ok(Reply::Rows(items.iter().map(|s| (series(s), s.code.clone())).collect()))
+}
+
+fn book(b: &Book) -> Json {
+    map([
+        ("kind", text(b.kind.as_str())),
+        ("code", text(&b.code)),
+        ("order", Json::Num(i64::from(b.order))),
+        ("name", text(&b.name)),
+    ])
+}
+
+fn series(s: &NumberSeries) -> Json {
+    let mut json = map([
+        ("code", text(&s.code)),
+        ("year_offset", Json::Num(i64::from(s.year_offset))),
+    ]);
+    if let Some(book) = s.book {
+        json = json.with("book", text(book.as_str()));
+    }
+    if let Some(document) = &s.document {
+        json = json.with("document", text(document));
+    }
+    json
 }
 
 /// Makes a new company's five books and their series from its pack's defaults.

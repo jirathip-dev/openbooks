@@ -257,6 +257,16 @@ async fn books_and_series_are_set_with_approve_and_read_with_read(pool: PgPool) 
     books.host().sign_in(person(2, "sam@example.com")?);
     assert_eq!(books.books(org).await?.items.len(), 5);
     assert_eq!(books.series(org, None).await?.items.len(), 5);
+    let listed: serde_json::Value = serde_json::from_str(&books.call_tool(org, "books", &[]).await?)?;
+    assert_eq!(
+        listed.pointer("/0"),
+        Some(&serde_json::json!({"kind": "general", "code": "JV", "order": 1, "name": "General journal"}))
+    );
+    let paged: serde_json::Value = serde_json::from_str(&books.call_tool(org, "series", &[]).await?)?;
+    assert_eq!(
+        paged.pointer("/items/0"),
+        Some(&serde_json::json!({"code": "AP", "book": "purchases", "year_offset": 0}))
+    );
     let saved = books.save_book(org, book(BookKind::General, "GJ", 1, "General")).await;
     assert!(
         matches!(saved, Err(Error::Forbidden { word: Word::Approve })),

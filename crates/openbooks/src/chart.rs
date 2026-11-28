@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use openbooks_core::{AccountType, Currency, Date, IdempotencyKey, OrgId, Word};
+use openbooks_core::{AccountType, Currency, Date, IdempotencyKey, OrgId, Refusal, Word};
 use openbooks_db::audit::Record;
 use openbooks_db::chart::{self, Account, Dimension, DimensionValue, RoleAccount, Terms};
 
 use crate::members::{PAGE, pack_of, paged};
-use crate::{AccountRole, Error, Field, Host, Openbooks, Operation, Page, Schema, Shape};
+use crate::openapi::{Json, map, text};
+use crate::{AccountRole, Ask, Error, Field, Host, Openbooks, Operation, Page, Reply, Schema, Shape};
 
 /// The roles the core's own postings look an account up by; a pack adds its own.
 pub const CORE_ROLES: &[AccountRole] = &[
@@ -444,4 +445,109 @@ impl<H: Host + 'static> Openbooks<H> {
         })
         .await
     }
+}
+
+pub(crate) async fn serve(ask: Ask<'_>) -> Result<Reply, Error> {
+    let (n, after, org) = (i64::from(ask.rows()), ask.after()?, ask.org);
+    let after = after.as_deref();
+    let slot = ask.argument("slot").map(whole).transpose()?;
+    let on = ask.argument("on").map(day).transpose()?;
+    let reply = match ask.tool {
+        "accounts" => rows(&chart::accounts(ask.db, org, after, n).await?, account, |a| {
+            a.code.clone()
+        }),
+        "terms" => rows(&chart::terms(ask.db, org, after, n).await?, terms, |t| t.code.clone()),
+        "dimension_values" => {
+            let slot = any_slot(slot.ok_or(Refusal::BadId)?)?;
+            rows(&chart::values(ask.db, org, slot, after, n).await?, value, |v| {
+                v.code.clone()
+            })
+        }
+        "dimensions" => Reply::One(Json::List(
+            chart::dimensions(ask.db, org).await?.iter().map(dimension).collect(),
+        )),
+        "account_roles" => {
+            let roles = chart::roles_on(ask.db, org, on.ok_or(Refusal::BadDate)?).await?;
+            Reply::One(Json::List(roles.iter().map(role).collect()))
+        }
+        other => return Err(Error::NoSuchTool(other.to_owned())),
+    };
+    Ok(reply)
+}
+
+fn rows<T>(items: &[T], json: fn(&T) -> Json, cursor: fn(&T) -> String) -> Reply {
+    Reply::Rows(items.iter().map(|i| (json(i), cursor(i))).collect())
+}
+
+fn whole(value: &str) -> Result<u16, Error> {
+    Ok(value.parse().map_err(|_| Refusal::BadId)?)
+}
+
+fn day(value: &str) -> Result<Date, Error> {
+    let parts: Vec<u16> = value
+        .split('-')
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .map_err(|_| Refusal::BadDate)?;
+    let part = |n: u16| u8::try_from(n).map_err(|_| Refusal::BadDate);
+    match parts[..] {
+        [year, month, day] => Ok(Date::new(year, part(month)?, part(day)?)?),
+        _ => Err(Refusal::BadDate.into()),
+    }
+}
+
+fn date(d: Date) -> Json {
+    let month = d.month();
+    text(&format!("{:04}-{:02}-{:02}", month.year(), month.month(), d.day()))
+}
+
+fn maybe(json: Json, key: &str, value: Option<&String>) -> Json {
+    match value {
+        Some(value) => json.with(key, text(value)),
+        None => json,
+    }
+}
+
+fn account(a: &Account) -> Json {
+    let json = map([
+        ("code", text(&a.code)),
+        ("name", text(&a.name)),
+        ("account_type", text(a.account_type.as_str())),
+        ("active", Json::Bool(a.active)),
+    ]);
+    maybe(
+        maybe(json, "parent", a.parent.as_ref()),
+        "currency",
+        a.currency.as_ref(),
+    )
+}
+
+fn role(r: &RoleAccount) -> Json {
+    map([
+        ("role", text(&r.role)),
+        ("from", date(r.from)),
+        ("account", text(&r.account)),
+    ])
+}
+
+fn dimension(d: &Dimension) -> Json {
+    map([("slot", Json::Num(i64::from(d.slot))), ("name", text(&d.name))])
+}
+
+fn value(v: &DimensionValue) -> Json {
+    let json = map([
+        ("code", text(&v.code)),
+        ("name", text(&v.name)),
+        ("active", Json::Bool(v.active)),
+    ]);
+    maybe(json, "host_ref", v.host_ref.as_ref())
+}
+
+fn terms(t: &Terms) -> Json {
+    map([
+        ("code", text(&t.code)),
+        ("name", text(&t.name)),
+        ("days", Json::Num(i64::from(t.days))),
+        ("active", Json::Bool(t.active)),
+    ])
 }
