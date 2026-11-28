@@ -9,17 +9,41 @@ use openbooks_db::events::{self, Claim};
 use openbooks_db::members::{self, Member};
 use sqlx::{PgConnection, PgPool};
 
+use crate::chart::{
+    ACCOUNT_ROLES, ACCOUNTS, ADD_DIMENSION, DIMENSIONS, GIVE_ROLE, REMOVE_DIMENSION, RENAME_DIMENSION, REQUIRE,
+    SAVE_ACCOUNT, SAVE_TERMS, SAVE_VALUE, SYNC_VALUE, TERMS, VALUES,
+};
 use crate::{Error, Hooks, Host, Mount, NoPack, Operation, Pack, Page, SignedIn, Work};
 
 type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 
-/// The member operations, mounted under `books`.
+/// The member, chart, dimension and terms operations, mounted under `books`.
 pub const BOOKS: Mount = Mount {
     key: "books",
-    operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER, AUDIT],
+    operations: &[
+        MEMBERS,
+        ADD_MEMBER,
+        CHANGE_ROLE,
+        REMOVE_MEMBER,
+        AUDIT,
+        ACCOUNTS,
+        SAVE_ACCOUNT,
+        REQUIRE,
+        ACCOUNT_ROLES,
+        GIVE_ROLE,
+        DIMENSIONS,
+        ADD_DIMENSION,
+        RENAME_DIMENSION,
+        REMOVE_DIMENSION,
+        VALUES,
+        SAVE_VALUE,
+        SYNC_VALUE,
+        TERMS,
+        SAVE_TERMS,
+    ],
 };
 
-const PAGE: u16 = 100;
+pub(crate) const PAGE: u16 = 100;
 
 const MEMBERS: Operation = crate::read!("members", Word::Read, "Lists the company's members by email, a page at a time.", {
     after: Option<String> = "The cursor from the last page's next; absent for the first page.",
@@ -53,7 +77,7 @@ const AUDIT: Operation = crate::closed_read!("audit", Word::Approve, "Lists the 
 pub struct Openbooks<H> {
     host: Arc<H>,
     hooks: Arc<dyn Hooks>,
-    packs: Packs,
+    pub(crate) packs: Packs,
 }
 
 /// Sets up the books for a host and its hooks; `build` hands them over.
@@ -262,7 +286,7 @@ impl<H: Host + 'static> Openbooks<H> {
         })
     }
 
-    async fn read<T, F>(&self, org: OrgId, op: Operation, work: F) -> Result<T, Error>
+    pub(crate) async fn read<T, F>(&self, org: OrgId, op: Operation, work: F) -> Result<T, Error>
     where
         T: Send + 'static,
         F: for<'c> FnOnce(&'c mut PgConnection) -> Work<'c, T> + Send + 'static,
@@ -281,7 +305,7 @@ impl<H: Host + 'static> Openbooks<H> {
         Ok(out)
     }
 
-    async fn write<T, F>(
+    pub(crate) async fn write<T, F>(
         &self,
         org: OrgId,
         op: Operation,
@@ -318,14 +342,14 @@ impl<H: Host + 'static> Openbooks<H> {
     }
 }
 
-fn paged<T>(mut items: Vec<T>, cursor: impl Fn(&T) -> String) -> Page<T> {
+pub(crate) fn paged<T>(mut items: Vec<T>, cursor: impl Fn(&T) -> String) -> Page<T> {
     let more = items.len() > usize::from(PAGE);
     items.truncate(usize::from(PAGE));
     let next = more.then(|| items.last().map(cursor)).flatten();
     Page { items, next }
 }
 
-trait Answer: Sized {
+pub(crate) trait Answer: Sized {
     fn store(&self) -> Option<String>;
 
     fn load(stored: Option<&str>) -> Result<Self, Error>;
@@ -439,7 +463,7 @@ impl<H: Host> Call<H> {
     }
 }
 
-async fn pack_of(packs: &Packs, db: &mut PgConnection, org: OrgId) -> Result<Arc<dyn Pack>, Error> {
+pub(crate) async fn pack_of(packs: &Packs, db: &mut PgConnection, org: OrgId) -> Result<Arc<dyn Pack>, Error> {
     let name = members::org_pack(db, org).await?.ok_or(Refusal::BadId)?;
     packs.get(name.as_str()).cloned().ok_or(Error::NoSuchPack(name))
 }
