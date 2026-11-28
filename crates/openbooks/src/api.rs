@@ -215,19 +215,16 @@ macro_rules! operation {
     };
 }
 
-/// Declares a read: `read!("name", word, "what it does", { field: Type = "what it is" } -> Answer)`.
 #[macro_export]
 macro_rules! read {
     ($($t:tt)*) => { $crate::operation!(Read, $($t)*) };
 }
 
-/// Declares a write a tool may make; it leaves one audit row.
 #[macro_export]
 macro_rules! write {
     ($($t:tt)*) => { $crate::operation!(Write, $($t)*) };
 }
 
-/// Declares a write closed to tools: only a person makes it; it leaves one audit row.
 #[macro_export]
 macro_rules! closed {
     ($($t:tt)*) => { $crate::operation!(Closed, $($t)*) };
