@@ -1,13 +1,17 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use openbooks_core::{Currency, Email, IdempotencyKey, OrgId, Refusal, Role, UserId, Word};
+use openbooks_db::SchemaError;
 use openbooks_db::audit::{self, Audit, AuditRow, Filter, Record};
 use openbooks_db::events::{self, Claim};
 use openbooks_db::members::{self, Member};
-use sqlx::PgConnection;
+use sqlx::{PgConnection, PgPool};
 
-use crate::{Error, Hooks, Host, Mount, Operation, Page, SignedIn, Work};
+use crate::{Error, Hooks, Host, Mount, NoPack, Operation, Pack, Page, SignedIn, Work};
+
+type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 
 /// The member operations, mounted under `books`.
 pub const BOOKS: Mount = Mount {
@@ -49,12 +53,14 @@ const AUDIT: Operation = crate::closed_read!("audit", Word::Approve, "Lists the 
 pub struct Openbooks<H> {
     host: Arc<H>,
     hooks: Arc<dyn Hooks>,
+    packs: Packs,
 }
 
 /// Sets up the books for a host and its hooks; `build` hands them over.
 pub struct Builder<H> {
     host: H,
     hooks: Arc<dyn Hooks>,
+    packs: BTreeMap<&'static str, Arc<dyn Pack>>,
 }
 
 impl<H: Host + 'static> Builder<H> {
@@ -66,10 +72,18 @@ impl<H: Host + 'static> Builder<H> {
         }
     }
 
+    /// Offers a pack by its name to the companies of these books; `none` is offered already.
+    #[must_use]
+    pub fn pack(mut self, pack: impl Pack + 'static) -> Self {
+        self.packs.insert(pack.name(), Arc::new(pack));
+        self
+    }
+
     pub fn build(self) -> Openbooks<H> {
         Openbooks {
             host: Arc::new(self.host),
             hooks: self.hooks,
+            packs: Arc::new(self.packs),
         }
     }
 }
@@ -80,9 +94,11 @@ impl<H: Host + 'static> Openbooks<H> {
         reason = "the books are built: Openbooks::new(host).build()"
     )]
     pub fn new(host: H) -> Builder<H> {
+        let none: Arc<dyn Pack> = Arc::new(NoPack);
         Builder {
             host,
             hooks: Arc::new(()),
+            packs: BTreeMap::from([(none.name(), none)]),
         }
     }
 
@@ -90,15 +106,30 @@ impl<H: Host + 'static> Openbooks<H> {
         &self.host
     }
 
-    /// Opens a company with the person signed in as its first Owner; sent again with its key, it opens one.
+    /// Applies the core's migrations, then each offered pack's in its own schema.
+    pub async fn migrate(&self, pool: &PgPool) -> Result<(), SchemaError> {
+        openbooks_db::migrate(pool).await?;
+        for pack in self.packs.values() {
+            openbooks_db::migrate_pack(pool, pack.name(), pack.migrations()).await?;
+        }
+        Ok(())
+    }
+
+    /// Opens a company under one offered pack with the person signed in as its first Owner; sent again with its key, it opens one.
     pub async fn create_company(
         &self,
         name: &str,
         base: Currency,
+        pack: &str,
         key: Option<IdempotencyKey>,
     ) -> Result<OrgId, Error> {
         let call = self.call()?;
-        let (name, request) = (name.to_owned(), format!("company.create {base} {name}"));
+        let pack = self
+            .packs
+            .get(pack)
+            .ok_or_else(|| Error::NoSuchPack(pack.to_owned()))?
+            .name();
+        let (name, request) = (name.to_owned(), format!("company.create {base} {pack} {name}"));
         let org = self
             .host
             .transact(move |db| {
@@ -106,7 +137,7 @@ impl<H: Host + 'static> Openbooks<H> {
                     if let Some(org) = call.replay(db, key.as_ref(), &request).await? {
                         return Ok(org);
                     }
-                    let org = members::create_org(db, &name, base).await?;
+                    let org = members::create_org(db, &name, base, pack).await?;
                     members::add(db, org, &call.signed.email, Role::Owner).await?;
                     members::tie(db, org, &call.signed.email, call.signed.user).await?;
                     call.record(db, org, "company.create", &name, &Record::Company, None)
@@ -195,13 +226,22 @@ impl<H: Host + 'static> Openbooks<H> {
 
     /// Hands the company's undelivered events to `after_commit` in order; a failed one waits, with those after it, for the next call.
     pub async fn deliver(&self, org: OrgId) -> Result<(), Error> {
-        let hooks = Arc::clone(&self.hooks);
+        let (hooks, packs) = (Arc::clone(&self.hooks), Arc::clone(&self.packs));
         let failed = self
             .host
             .transact(move |db| {
                 Box::pin(async move {
-                    for event in events::pending(db, org).await? {
-                        if let Err(error) = hooks.after_commit(&event).await {
+                    let pending = events::pending(db, org).await?;
+                    if pending.is_empty() {
+                        return Ok(None);
+                    }
+                    let pack = pack_of(&packs, db, org).await?;
+                    for event in pending {
+                        let delivered = match pack.after_commit(&event).await {
+                            Ok(()) => hooks.after_commit(&event).await,
+                            Err(error) => Err(error),
+                        };
+                        if let Err(error) = delivered {
                             return Ok(Some(error));
                         }
                         events::delivered(db, org, event.id).await?;
@@ -217,6 +257,7 @@ impl<H: Host + 'static> Openbooks<H> {
         Ok(Call {
             host: Arc::clone(&self.host),
             hooks: Arc::clone(&self.hooks),
+            packs: Arc::clone(&self.packs),
             signed: self.host.who().ok_or(Error::SignedOut)?,
         })
     }
@@ -314,6 +355,7 @@ impl Answer for OrgId {
 struct Call<H> {
     host: Arc<H>,
     hooks: Arc<dyn Hooks>,
+    packs: Packs,
     signed: SignedIn,
 }
 
@@ -392,8 +434,14 @@ impl<H: Host> Call<H> {
         };
         audit::write(db, org, row).await?;
         let event = events::write(db, org, &id, action, detail, self.signed.via.origin()).await?;
-        self.hooks.before_commit(db, &event).await
+        self.hooks.before_commit(db, &event).await?;
+        pack_of(&self.packs, db, org).await?.before_commit(db, &event).await
     }
+}
+
+async fn pack_of(packs: &Packs, db: &mut PgConnection, org: OrgId) -> Result<Arc<dyn Pack>, Error> {
+    let name = members::org_pack(db, org).await?.ok_or(Refusal::BadId)?;
+    packs.get(name.as_str()).cloned().ok_or(Error::NoSuchPack(name))
 }
 
 async fn keep_an_owner(db: &mut PgConnection, org: OrgId, email: &Email, leaves: bool) -> Result<(), Error> {
