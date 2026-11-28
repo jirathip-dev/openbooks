@@ -77,7 +77,9 @@ async fn books(pool: &PgPool) -> Res<(Openbooks<TestHost>, Recorder, OrgId)> {
         .hooks(recorder.clone())
         .build();
     books.host().sign_in(ann()?);
-    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    let org = books
+        .create_company("Acme", Currency::new("XTS", 2)?, "none", None)
+        .await?;
     Ok((books, recorder, org))
 }
 
@@ -109,7 +111,9 @@ async fn a_refusal_before_commit_rolls_the_change_back_and_leaves_no_row(pool: P
             .all(|m| m.email.as_str() != "bob@example.com")
     );
     *recorder.0.refuse.lock().unwrap_or_else(PoisonError::into_inner) = Some("company.create");
-    let opened = books.create_company("Other", Currency::new("XTS", 2)?, None).await;
+    let opened = books
+        .create_company("Other", Currency::new("XTS", 2)?, "none", None)
+        .await;
     assert!(matches!(opened, Err(Error::HookRefused(_))), "{opened:?}");
     let orgs: i64 = query_scalar("SELECT count(*) FROM ledger.org").fetch_one(&pool).await?;
     assert_eq!((orgs, counts(&pool).await?), (1, (1, 1, 1)));
@@ -137,9 +141,12 @@ async fn a_create_sent_twice_with_its_key_writes_once_and_another_body_is_refuse
     let unkeyed = books.add_member(org, bob, Role::Staff, None).await;
     assert!(matches!(unkeyed, Err(Error::AlreadyMember(_))), "{unkeyed:?}");
     let base = Currency::new("XTS", 2)?;
-    let first = books.create_company("Beta", base, key("open-beta")?).await?;
-    assert_eq!(books.create_company("Beta", base, key("open-beta")?).await?, first);
-    let renamed = books.create_company("Gamma", base, key("open-beta")?).await;
+    let first = books.create_company("Beta", base, "none", key("open-beta")?).await?;
+    assert_eq!(
+        books.create_company("Beta", base, "none", key("open-beta")?).await?,
+        first
+    );
+    let renamed = books.create_company("Gamma", base, "none", key("open-beta")?).await;
     assert!(matches!(renamed, Err(Error::KeyReused)), "{renamed:?}");
     let orgs: i64 = query_scalar("SELECT count(*) FROM ledger.org").fetch_one(&pool).await?;
     assert_eq!((orgs, counts(&pool).await?), (2, (3, 3, 3)));

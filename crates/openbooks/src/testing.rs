@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use openbooks_core::UserId;
-use sqlx::{PgConnection, PgPool};
+use openbooks_core::{BasisPoints, Document, Due, NoteReason, Party, Refusal, TaxCode, TaxLine, TaxPack, UserId};
+use sqlx::{PgConnection, PgPool, query};
 
-use crate::{Error, Files, Host, SignedIn, Work};
+use crate::{AccountRole, ChartAccount, Error, Event, Files, Hooks, Host, Migration, Pack, Series, SignedIn, Work};
 
 /// A host for tests: sign-in held in memory, a fixed clock, counted ids, files in memory, and a switch to roll back.
 pub struct TestHost {
@@ -110,5 +110,169 @@ impl Files for MemoryFiles {
             let found = files.iter().find(|(k, _)| k == key).map(|(_, bytes)| bytes.clone());
             found.ok_or_else(|| Error::Host(format!("no file {key}")))
         })
+    }
+}
+
+/// The added tax of the test pack: seven percent, due when the document is settled.
+pub const ADDED: TaxCode = TaxCode {
+    code: "T7",
+    due: Due::Settlement,
+};
+
+/// The withheld tax of the test pack: three percent of what a settlement pays.
+pub const WITHHELD: TaxCode = TaxCode {
+    code: "W3",
+    due: Due::Settlement,
+};
+
+/// A pack for tests, `test`: one added and one withheld tax, a table in its schema each change is noted in, and the changes it was handed after commit.
+#[derive(Clone, Default)]
+pub struct TestPack(Arc<Mutex<Vec<String>>>);
+
+impl TestPack {
+    pub fn delivered(&self) -> Vec<String> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).clone()
+    }
+}
+
+struct TestTax;
+
+impl TaxPack for TestTax {
+    fn added(&self) -> &[TaxCode] {
+        &[ADDED]
+    }
+
+    fn withheld(&self) -> &[TaxCode] {
+        &[WITHHELD]
+    }
+
+    fn document_tax(&self, document: &Document) -> Result<Vec<TaxLine>, Refusal> {
+        document.only(self.added())?;
+        if !document.lines.iter().any(|l| l.codes.iter().any(|c| c == ADDED.code)) {
+            return Ok(Vec::new());
+        }
+        let taxable = document.taxable(Some(ADDED.code))?;
+        let tax = taxable.share(BasisPoints(700))?;
+        Ok(vec![TaxLine {
+            code: ADDED.code,
+            taxable,
+            tax,
+        }])
+    }
+
+    fn settlement_tax(&self, settled: &Document, withheld: &[&str]) -> Result<Vec<TaxLine>, Refusal> {
+        let mut lines = self.document_tax(settled)?;
+        for code in withheld {
+            if *code != WITHHELD.code {
+                return Err(Refusal::UnknownTaxCode);
+            }
+            let taxable = settled.taxable(None)?;
+            let tax = taxable.share(BasisPoints(300))?;
+            lines.push(TaxLine {
+                code: WITHHELD.code,
+                taxable,
+                tax,
+            });
+        }
+        Ok(lines)
+    }
+
+    fn check_party(&self, party: &Party) -> Result<(), Refusal> {
+        match &party.tax_id {
+            Some(id) if !id.trim().is_empty() => Ok(()),
+            _ => Err(Refusal::Party("the test pack needs the party's tax id")),
+        }
+    }
+
+    fn note_reasons(&self) -> &[NoteReason] {
+        &[NoteReason {
+            code: "price",
+            label: "The price was wrong",
+        }]
+    }
+}
+
+impl Hooks for TestPack {
+    fn before_commit<'a>(&'a self, db: &'a mut PgConnection, event: &'a Event) -> Work<'a, ()> {
+        Box::pin(async move {
+            query("INSERT INTO pack_test.seen (org_id, event_id, action) VALUES ($1, $2, $3)")
+                .bind(event.org.get())
+                .bind(event.id)
+                .bind(&event.action)
+                .execute(db)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn after_commit<'a>(&'a self, event: &'a Event) -> Work<'a, ()> {
+        Box::pin(async move {
+            let mut delivered = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            delivered.push(event.action.clone());
+            Ok(())
+        })
+    }
+}
+
+impl Pack for TestPack {
+    fn name(&self) -> &'static str {
+        "test"
+    }
+
+    fn tax(&self) -> &dyn TaxPack {
+        &TestTax
+    }
+
+    fn account_roles(&self) -> &[AccountRole] {
+        &[
+            AccountRole {
+                key: "added_tax_undue",
+                about: "Added tax on documents not yet settled.",
+            },
+            AccountRole {
+                key: "added_tax",
+                about: "Added tax due on what was settled.",
+            },
+            AccountRole {
+                key: "withheld_tax",
+                about: "Tax a customer withheld from a settlement.",
+            },
+        ]
+    }
+
+    fn chart(&self) -> &[ChartAccount] {
+        &[
+            ChartAccount {
+                code: "2101",
+                name: "Added tax undue",
+                role: Some("added_tax_undue"),
+            },
+            ChartAccount {
+                code: "2102",
+                name: "Added tax",
+                role: Some("added_tax"),
+            },
+            ChartAccount {
+                code: "1150",
+                name: "Tax withheld from us",
+                role: Some("withheld_tax"),
+            },
+        ]
+    }
+
+    fn series(&self) -> &[Series] {
+        &[Series {
+            document: "invoice",
+            prefix: "TI",
+        }]
+    }
+
+    fn migrations(&self) -> &[Migration] {
+        &[Migration {
+            version: 1,
+            name: "seen",
+            sql: "CREATE TABLE seen (org_id bigint NOT NULL REFERENCES ledger.org (org_id), event_id bigint NOT NULL, \
+                  action text NOT NULL, PRIMARY KEY (org_id, event_id))",
+        }]
     }
 }

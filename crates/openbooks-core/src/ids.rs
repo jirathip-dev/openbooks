@@ -92,3 +92,36 @@ token!(
     BadOrigin,
     "The host's own reference for a change its code made, so it knows its own events."
 );
+
+/// A calendar day: a month of a year and a day that month has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Date {
+    month: Month,
+    day: u8,
+}
+
+impl Date {
+    pub fn new(year: u16, month: u8, day: u8) -> Result<Self, Refusal> {
+        let month = Month::new(year, month).map_err(|_| Refusal::BadDate)?;
+        let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+        let days = match month.month() {
+            2 if leap => 29,
+            2 => 28,
+            4 | 6 | 9 | 11 => 30,
+            _ => 31,
+        };
+        if (1..=days).contains(&day) {
+            Ok(Self { month, day })
+        } else {
+            Err(Refusal::BadDate)
+        }
+    }
+
+    pub fn month(self) -> Month {
+        self.month
+    }
+
+    pub fn day(self) -> u8 {
+        self.day
+    }
+}
