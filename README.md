@@ -41,6 +41,16 @@ test runs Blocks' scheme and style gates over `web/theme`. CI is `.github/workfl
 tests beside a Postgres service, on GitHub-hosted runners with read-only permissions; a fork's pull request gets no
 secret.
 
+## Releases
+
+The five crates and both npm packages share one version, the workspace's. When `ci` goes green on `main` at a
+version with no `v*` tag yet, `.github/workflows/release.yml` builds the server for Linux (x86_64, arm64), macOS
+(arm64) and Windows (x86_64), publishes to crates.io and npm (`CARGO_REGISTRY_TOKEN`, `NPM_TOKEN`), and tags the
+release with notes from the PR titles. The `local/surface` gate (`.gatekeeper/surface.sh`) diffs the public
+surface against the last release: each crate's public items, each npm package's declarations (`mount()`'s props)
+and each JSON document under `surface/` (the OpenAPI documents, template data shapes, event payloads, import and
+export columns). A line that is gone or changed fails unless the version is raised to the next breaking one.
+
 ## Branch protection
 
 On `main` and `staging`:

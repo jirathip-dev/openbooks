@@ -1,6 +1,7 @@
 [package]
 name = "openbooks-db"
 version.workspace = true
+description = "openbooks: storage, over the core"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

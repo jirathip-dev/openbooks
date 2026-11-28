@@ -1,6 +1,7 @@
 [package]
 name = "openbooks-core"
 version.workspace = true
+description = "openbooks: the domain types and rules of the books"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

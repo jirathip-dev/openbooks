@@ -1,6 +1,7 @@
 [package]
 name = "openbooks"
 version.workspace = true
+description = "openbooks: the library a host embeds"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
