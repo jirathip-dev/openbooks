@@ -93,11 +93,12 @@ impl Operation {
     }
 }
 
-/// The operations a host mounts under one key; `openapi` writes their document.
+/// The operations a host mounts under one key, with `serve` answering those offered as tools; `openapi` writes their document.
 #[derive(Debug, Clone, Copy)]
 pub struct Mount {
     pub key: &'static str,
     pub operations: &'static [Operation],
+    pub serve: crate::Serve,
 }
 
 /// The shape of a value on the wire: each field class with its schema marks.

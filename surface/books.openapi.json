@@ -1834,6 +1834,39 @@
           }
         }
       }
+    },
+    "/books/{org}/tools": {
+      "get": {
+        "operationId": "tools",
+        "description": "Lists the tools offered to the caller, as an MCP tool list in JSON; a tool is called at its own route.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

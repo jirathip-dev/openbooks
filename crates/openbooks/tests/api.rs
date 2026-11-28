@@ -185,7 +185,8 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
             ("member.role", "own", false),
             ("members", "read", true),
             ("terms", "read", true),
-            ("terms.save", "approve", false)
+            ("terms.save", "approve", false),
+            ("tools", "read", false)
         ]
     );
     let surface = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../surface/books.openapi.json");
@@ -248,7 +249,16 @@ const QUIET: Operation = openbooks::write!("quiet", Word::Draft, "", { email: Em
 
 #[test]
 fn a_declared_tool_answering_a_never_field_or_lacking_descriptions_fails_and_a_closed_one_may_answer_it() -> Res<()> {
-    let doc = |operations| serde_json::from_str::<Value>(&Mount { key: "t", operations }.openapi());
+    let doc = |operations| {
+        serde_json::from_str::<Value>(
+            &Mount {
+                key: "t",
+                operations,
+                serve: BOOKS.serve,
+            }
+            .openapi(),
+        )
+    };
     assert_eq!(rules(&doc(&[LEAKS])?), ["never"]);
     assert_eq!(check(&doc(&[SHOWS])?), Vec::<String>::new());
     assert_eq!(rules(&doc(&[QUIET])?), ["description"]);

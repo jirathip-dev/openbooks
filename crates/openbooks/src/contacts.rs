@@ -6,7 +6,8 @@ use openbooks_db::contacts::{self, Contact, Identity};
 use sqlx::PgConnection;
 
 use crate::members::{PAGE, Packs, pack_of, paged};
-use crate::{Error, Field, Host, Never, Openbooks, Operation, Page, Schema, Shape};
+use crate::openapi::{Json, map, text};
+use crate::{Ask, Error, Field, Host, Never, Openbooks, Operation, Page, Reply, Schema, Shape};
 
 pub(crate) const CONTACTS: Operation = crate::read!("contacts", Word::Read, "Lists the customers, suppliers and employees by code, a page at a time.", {
     after: Option<String> = "The cursor from the last page's next; absent for the first page.",
@@ -95,6 +96,35 @@ impl Shape for Identity {
             field("bank_account", "The bank account it is paid to.", never()),
         ])
     }
+}
+
+fn json(c: &Contact) -> Json {
+    let email = c.email.as_ref().map(|e| e.as_str().to_owned());
+    let optional = [
+        ("address", &c.address),
+        ("email", &email),
+        ("phone", &c.phone),
+        ("terms", &c.terms),
+        ("currency", &c.currency),
+        ("withholding", &c.withholding),
+        ("host_ref", &c.host_ref),
+    ];
+    let json = map([
+        ("code", text(&c.code)),
+        ("name", text(&c.name)),
+        ("kind", text(c.kind.as_str())),
+    ]);
+    optional.into_iter().fold(json, |json, (key, value)| match value {
+        Some(value) => json.with(key, text(value)),
+        None => json,
+    })
+}
+
+/// Answers the `contacts` tool: a page of contacts with no tax identity or bank account.
+pub(crate) async fn serve(ask: Ask<'_>) -> Result<Reply, Error> {
+    let (limit, after) = (i64::from(ask.rows()), ask.after()?);
+    let rows = contacts::contacts(ask.db, ask.org, after.as_deref(), limit).await?;
+    Ok(Reply::Rows(rows.iter().map(|c| (json(c), c.code.clone())).collect()))
 }
 
 async fn check(
