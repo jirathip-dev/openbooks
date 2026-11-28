@@ -142,13 +142,14 @@ async fn each_company_names_one_offered_pack_and_only_its_pack_hears_its_changes
     let heard = ["company.create", "member.add"].map(str::to_owned);
     assert_eq!(seen, heard.clone().map(|action| (taxed.get(), action)));
     assert_eq!(pack.delivered(), heard);
-    let without = Openbooks::new(TestHost::new(pool.clone())).build();
-    without.host().sign_in(person(1, "ann@example.com")?);
-    let orphan = without
-        .add_member(taxed, Email::new("dee@example.com")?, Role::Staff, None)
+    raw_sql("UPDATE ledger.org SET pack = 'gone' WHERE name = 'Plain'")
+        .execute(&pool)
+        .await?;
+    let orphan = books
+        .add_member(plain, Email::new("dee@example.com")?, Role::Staff, None)
         .await;
     assert!(
-        matches!(&orphan, Err(Error::NoSuchPack(name)) if name == "test"),
+        matches!(&orphan, Err(Error::NoSuchPack(name)) if name == "gone"),
         "{orphan:?}"
     );
     let orgs: Vec<(String, String, i64)> = query_as(
@@ -158,6 +159,6 @@ async fn each_company_names_one_offered_pack_and_only_its_pack_hears_its_changes
     .fetch_all(&pool)
     .await?;
     let owned = |name: &str, pack: &str| (name.to_owned(), pack.to_owned(), 2);
-    assert_eq!(orgs, [owned("Acme", "test"), owned("Plain", "none")]);
+    assert_eq!(orgs, [owned("Acme", "test"), owned("Plain", "gone")]);
     Ok(())
 }
