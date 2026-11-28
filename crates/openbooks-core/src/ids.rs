@@ -26,13 +26,41 @@ id!(OrgId, "An organisation that keeps a set of books.");
 id!(UserId, "A person who signs in.");
 id!(ProjectId, "A project whose costs and income are tracked apart.");
 
-/// Which book an entry belongs to: the general ledger or a sub-ledger over it.
+/// One of the five books a company keeps, fixed in kind; the company names each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BookKind {
     General,
-    Receivables,
-    Payables,
-    Projects,
+    Receipts,
+    Payments,
+    Purchases,
+    Sales,
+}
+
+impl BookKind {
+    pub const ALL: [Self; 5] = [
+        Self::General,
+        Self::Receipts,
+        Self::Payments,
+        Self::Purchases,
+        Self::Sales,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::General => "general",
+            Self::Receipts => "receipts",
+            Self::Payments => "payments",
+            Self::Purchases => "purchases",
+            Self::Sales => "sales",
+        }
+    }
+
+    pub fn parse(text: &str) -> Result<Self, Refusal> {
+        Self::ALL
+            .into_iter()
+            .find(|k| k.as_str() == text)
+            .ok_or(Refusal::BadBookKind)
+    }
 }
 
 /// A calendar month of a year, the unit of a period.

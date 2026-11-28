@@ -3,7 +3,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use openbooks_core::{BasisPoints, Document, Due, NoteReason, Party, Refusal, TaxCode, TaxLine, TaxPack, UserId};
+use openbooks_core::{
+    BasisPoints, BookKind, Document, Due, NoteReason, Party, Refusal, TaxCode, TaxLine, TaxPack, UserId,
+};
 use sqlx::{PgConnection, PgPool, query};
 
 use crate::{AccountRole, ChartAccount, Error, Event, Files, Hooks, Host, Migration, Pack, Series, SignedIn, Work};
@@ -261,10 +263,18 @@ impl Pack for TestPack {
     }
 
     fn series(&self) -> &[Series] {
-        &[Series {
-            document: "invoice",
-            prefix: "TI",
-        }]
+        &[
+            Series {
+                document: "invoice",
+                code: "TI",
+                book: Some(BookKind::Sales),
+            },
+            Series {
+                document: "quotation",
+                code: "QT",
+                book: None,
+            },
+        ]
     }
 
     fn migrations(&self) -> &[Migration] {

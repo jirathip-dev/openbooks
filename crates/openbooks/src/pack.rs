@@ -1,4 +1,4 @@
-use openbooks_core::{NoTax, TaxPack};
+use openbooks_core::{BookKind, NoTax, TaxPack};
 use openbooks_db::Migration;
 
 use crate::{Hooks, Mount};
@@ -18,32 +18,65 @@ pub struct ChartAccount {
     pub role: Option<&'static str>,
 }
 
-/// The names a company's five books start with.
+/// The code and name a book starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BookName {
+    pub code: &'static str,
+    pub name: &'static str,
+}
+
+/// The codes and names a company's five books start with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BookNames {
-    pub general: &'static str,
-    pub sales: &'static str,
-    pub purchases: &'static str,
-    pub receipts: &'static str,
-    pub payments: &'static str,
+    pub general: BookName,
+    pub receipts: BookName,
+    pub payments: BookName,
+    pub purchases: BookName,
+    pub sales: BookName,
 }
 
 impl BookNames {
-    /// The names a pack that says none gets.
+    /// The codes and names a pack that says none gets.
     pub const PLAIN: Self = Self {
-        general: "General journal",
-        sales: "Sales",
-        purchases: "Purchases",
-        receipts: "Receipts",
-        payments: "Payments",
+        general: BookName {
+            code: "JV",
+            name: "General journal",
+        },
+        receipts: BookName {
+            code: "RV",
+            name: "Receipts",
+        },
+        payments: BookName {
+            code: "PV",
+            name: "Payments",
+        },
+        purchases: BookName {
+            code: "AP",
+            name: "Purchases",
+        },
+        sales: BookName {
+            code: "AR",
+            name: "Sales",
+        },
     };
+
+    pub fn of(self, kind: BookKind) -> BookName {
+        match kind {
+            BookKind::General => self.general,
+            BookKind::Receipts => self.receipts,
+            BookKind::Payments => self.payments,
+            BookKind::Purchases => self.purchases,
+            BookKind::Sales => self.sales,
+        }
+    }
 }
 
-/// A number series: the kind of document it numbers and the prefix of its numbers.
+/// A number series a pack starts a company with: the document kind it numbers, its code, and the book it posts in, if the kind posts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Series {
     pub document: &'static str,
-    pub prefix: &'static str,
+    pub code: &'static str,
+    pub book: Option<BookKind>,
 }
 
 /// A print or message template a pack brings, by name.

@@ -168,6 +168,8 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
             ("account_roles", "read", true),
             ("accounts", "read", true),
             ("audit", "approve", false),
+            ("book.save", "approve", false),
+            ("books", "read", true),
             ("dimension.add", "approve", false),
             ("dimension.remove", "approve", false),
             ("dimension.rename", "approve", false),
@@ -179,6 +181,9 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
             ("member.remove", "own", false),
             ("member.role", "own", false),
             ("members", "read", true),
+            ("series", "read", true),
+            ("series.add", "approve", false),
+            ("series.offset", "approve", false),
             ("terms", "read", true),
             ("terms.save", "approve", false)
         ]
