@@ -92,6 +92,7 @@ fn reaches_never(schema: &Schema) -> bool {
         | Schema::Text
         | Schema::Flag
         | Schema::Whole
+        | Schema::Quantity
         | Schema::Day
         | Schema::Email
         | Schema::Id

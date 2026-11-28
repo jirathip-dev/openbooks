@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod chart;
 pub mod events;
+pub mod items;
 pub mod members;
 
 use std::collections::BTreeSet;

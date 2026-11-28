@@ -470,12 +470,12 @@ pub(crate) async fn serve(ask: Ask<'_>) -> Result<Reply, Error> {
             let roles = chart::roles_on(ask.db, org, on.ok_or(Refusal::BadDate)?).await?;
             Reply::One(Json::List(roles.iter().map(role).collect()))
         }
-        other => return Err(Error::NoSuchTool(other.to_owned())),
+        _ => return crate::items::serve(ask).await,
     };
     Ok(reply)
 }
 
-fn rows<T>(items: &[T], json: fn(&T) -> Json, cursor: fn(&T) -> String) -> Reply {
+pub(crate) fn rows<T>(items: &[T], json: fn(&T) -> Json, cursor: fn(&T) -> String) -> Reply {
     Reply::Rows(items.iter().map(|i| (json(i), cursor(i))).collect())
 }
 
@@ -501,7 +501,7 @@ fn date(d: Date) -> Json {
     text(&format!("{:04}-{:02}-{:02}", month.year(), month.month(), d.day()))
 }
 
-fn maybe(json: Json, key: &str, value: Option<&String>) -> Json {
+pub(crate) fn maybe(json: Json, key: &str, value: Option<&String>) -> Json {
     match value {
         Some(value) => json.with(key, text(value)),
         None => json,
