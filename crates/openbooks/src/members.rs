@@ -7,12 +7,14 @@ use openbooks_db::events::{self, Claim};
 use openbooks_db::members::{self, Member};
 use sqlx::PgConnection;
 
-use crate::{Error, Hooks, Host, Mount, Operation, Page, SignedIn, Work};
+use crate::openapi::{Json, map, text};
+use crate::tools::{ROWS, agent_page, listing};
+use crate::{Error, Hooks, Host, Mount, Operation, Page, SignedIn, Tools, Work};
 
 /// The member operations, mounted under `books`.
 pub const BOOKS: Mount = Mount {
     key: "books",
-    operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER, AUDIT],
+    operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER, AUDIT, TOOLS],
 };
 
 const PAGE: u16 = 100;
@@ -45,16 +47,20 @@ const AUDIT: Operation = crate::closed_read!("audit", Word::Approve, "Lists the 
     after: Option<String> = "The cursor from the last page's next; absent for the first page.",
 } -> Page<AuditRow>);
 
+const TOOLS: Operation = crate::closed_read!("tools", Word::Read, "Lists the tools offered to the caller, as an MCP tool list in JSON; a tool is called at its own route.", {} -> String);
+
 /// The books, embedded in a host.
 pub struct Openbooks<H> {
     host: Arc<H>,
     hooks: Arc<dyn Hooks>,
+    tools: Arc<Tools>,
 }
 
 /// Sets up the books for a host and its hooks; `build` hands them over.
 pub struct Builder<H> {
     host: H,
     hooks: Arc<dyn Hooks>,
+    tools: Tools,
 }
 
 impl<H: Host + 'static> Builder<H> {
@@ -66,10 +72,17 @@ impl<H: Host + 'static> Builder<H> {
         }
     }
 
+    /// Replaces the tools built from `BOOKS` alone, as with a pack's mount or another switch.
+    #[must_use]
+    pub fn tools(self, tools: Tools) -> Self {
+        Self { tools, ..self }
+    }
+
     pub fn build(self) -> Openbooks<H> {
         Openbooks {
             host: Arc::new(self.host),
             hooks: self.hooks,
+            tools: Arc::new(self.tools),
         }
     }
 }
@@ -83,6 +96,7 @@ impl<H: Host + 'static> Openbooks<H> {
         Builder {
             host,
             hooks: Arc::new(()),
+            tools: Tools::new(&[BOOKS]),
         }
     }
 
@@ -122,10 +136,41 @@ impl<H: Host + 'static> Openbooks<H> {
 
     /// One page of the company's members by email, from just after the cursor `after`.
     pub async fn members(&self, org: OrgId, after: Option<String>) -> Result<Page<Member>, Error> {
+        let items = self.member_rows(org, after, PAGE + 1).await?;
+        Ok(paged(items, |m| m.email.as_str().to_owned()))
+    }
+
+    async fn member_rows(&self, org: OrgId, after: Option<String>, limit: u16) -> Result<Vec<Member>, Error> {
         self.read(org, MEMBERS, move |db| {
+            Box::pin(async move { Ok(members::members(db, org, after.as_deref(), i64::from(limit)).await?) })
+        })
+        .await
+    }
+
+    /// The tools offered to the person signed in, as the MCP tool list the local and remote servers serve.
+    pub async fn tools(&self, org: OrgId) -> Result<String, Error> {
+        Ok(listing(&self.offered(org).await?))
+    }
+
+    /// Calls an offered tool with its arguments by name, answered in the agent view: 50 rows, a size cap, free text scrubbed.
+    pub async fn call_tool(&self, org: OrgId, tool: &str, arguments: &[(&str, &str)]) -> Result<String, Error> {
+        let argument = |name: &str| arguments.iter().find(|(k, _)| *k == name).map(|(_, v)| (*v).to_owned());
+        if !self.offered(org).await?.iter().any(|op| op.name() == tool) {
+            return Err(Error::NoSuchTool(tool.to_owned()));
+        }
+        if tool == MEMBERS.name() {
+            let items = self.member_rows(org, argument("after"), ROWS + 1).await?;
+            return Ok(agent_page(items, member, |m| m.email.as_str().to_owned()));
+        }
+        Err(Error::NoSuchTool(tool.to_owned()))
+    }
+
+    async fn offered(&self, org: OrgId) -> Result<Vec<Operation>, Error> {
+        let (tools, signed) = (Arc::clone(&self.tools), self.call()?.signed);
+        self.read(org, TOOLS, move |db| {
             Box::pin(async move {
-                let items = members::members(db, org, after.as_deref(), i64::from(PAGE) + 1).await?;
-                Ok(paged(items, |m| m.email.as_str().to_owned()))
+                let member = members::member_by_user(db, org, signed.user).await?;
+                Ok(member.map_or_else(Vec::new, |m| tools.offered(m.role, &signed)))
             })
         })
         .await
@@ -274,6 +319,14 @@ impl<H: Host + 'static> Openbooks<H> {
             .await?;
         self.deliver(org).await.ok();
         Ok(out)
+    }
+}
+
+fn member(m: &Member) -> Json {
+    let json = map([("email", text(m.email.as_str())), ("role", text(m.role.as_str()))]);
+    match m.user {
+        Some(user) => json.with("user", Json::Num(user.get())),
+        None => json,
     }
 }
 

@@ -166,7 +166,8 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
             ("member.add", "own", false),
             ("member.remove", "own", false),
             ("member.role", "own", false),
-            ("members", "read", true)
+            ("members", "read", true),
+            ("tools", "read", false)
         ]
     );
     let surface = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../surface/books.openapi.json");

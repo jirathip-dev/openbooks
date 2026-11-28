@@ -61,7 +61,7 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
 
 #[sqlx::test(migrations = false)]
 async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_words_allow(pool: PgPool) -> Res<()> {
-    let words = [Word::Read, Word::Own, Word::Own, Word::Own, Word::Approve];
+    let words = [Word::Read, Word::Own, Word::Own, Word::Own, Word::Approve, Word::Read];
     assert_eq!(BOOKS.operations.iter().map(Operation::word).collect::<Vec<_>>(), words);
     let (books, org) = books(pool).await?;
     for (n, role) in (2..).zip(Role::ALL) {

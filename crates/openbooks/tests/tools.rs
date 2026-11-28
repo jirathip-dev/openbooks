@@ -1,0 +1,176 @@
+use openbooks::testing::TestHost;
+use openbooks::{BOOKS, Error, Mount, Never, Openbooks, Operation, Page, SignedIn, Tools, Via};
+use openbooks_core::{Currency, Email, OrgId, Role, UserId, Word};
+use serde_json::Value;
+use sqlx::PgPool;
+
+type Res<T> = Result<T, Box<dyn std::error::Error>>;
+
+const PROPOSE: Operation =
+    openbooks::write!("propose", Word::Draft, "Proposes an entry.", { note: String = "What it is for." } -> ());
+const APPROVE: Operation = openbooks::write!("approve", Word::Approve, "Approves an entry.", {} -> ());
+const REPORT: Operation = openbooks::read!("report", Word::Reports, "Reports on the whole company.", {} -> String);
+const LEAKS: Operation = openbooks::read!("leak", Word::Read, "Answers secrets.", {} -> Page<Never<String>>);
+const PACK: Mount = Mount {
+    key: "pack",
+    operations: &[PROPOSE, APPROVE, REPORT, LEAKS],
+};
+
+fn person(user: i64, address: &str) -> Res<SignedIn> {
+    Ok(SignedIn::person(UserId::new(user)?, Email::new(address)?))
+}
+
+fn names(tools: &Tools, role: Role, signed: &SignedIn) -> Vec<&'static str> {
+    tools.offered(role, signed).iter().map(Operation::name).collect()
+}
+
+#[test]
+fn a_mounted_route_becomes_a_tool_with_no_registry_change_and_a_never_field_never_does() -> Res<()> {
+    let owner = person(1, "ann@example.com")?;
+    assert_eq!(names(&Tools::new(&[BOOKS]), Role::Owner, &owner), ["members"]);
+    let tools = Tools::new(&[BOOKS, PACK]);
+    assert_eq!(names(&tools, Role::Owner, &owner), ["members", "propose", "approve"]);
+    let all = tools.switch("report", true)?;
+    assert_eq!(
+        names(&all, Role::Owner, &owner),
+        ["members", "propose", "approve", "report"]
+    );
+    assert!(matches!(all.switch("leak", true), Err(Error::NoSuchTool(name)) if name == "leak"));
+    Ok(())
+}
+
+#[test]
+fn a_tool_is_offered_only_to_a_role_with_its_word_so_a_viewer_gets_no_propose() -> Res<()> {
+    let tools = Tools::new(&[BOOKS, PACK]).switch("report", true)?;
+    let signed = person(1, "ann@example.com")?;
+    let offered = |role| names(&tools, role, &signed);
+    assert_eq!(offered(Role::Viewer), ["members", "report"]);
+    assert_eq!(offered(Role::Staff), ["members", "propose"]);
+    assert_eq!(offered(Role::Accountant), ["members", "propose", "approve", "report"]);
+    let assistant = SignedIn {
+        via: Via::Assistant,
+        ..signed.clone()
+    };
+    assert_eq!(names(&tools, Role::Owner, &assistant), ["members", "propose", "report"]);
+    Ok(())
+}
+
+#[test]
+fn company_wide_reports_start_off_and_a_switch_turns_one_on_or_a_tool_off() -> Res<()> {
+    let viewer = person(1, "vic@example.com")?;
+    let tools = Tools::new(&[BOOKS, PACK]);
+    assert_eq!(names(&tools, Role::Viewer, &viewer), ["members"]);
+    let tools = tools.switch("report", true)?.switch("members", false)?;
+    assert_eq!(names(&tools, Role::Viewer, &viewer), ["report"]);
+    assert!(matches!(tools.switch("nothing", true), Err(Error::NoSuchTool(_))));
+    Ok(())
+}
+
+async fn books(pool: PgPool, tools: Tools) -> Res<(Openbooks<TestHost>, OrgId)> {
+    openbooks_db::migrate(&pool).await?;
+    let books = Openbooks::new(TestHost::new(pool)).tools(tools).build();
+    books.host().sign_in(person(1, "ann@example.com")?);
+    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    Ok((books, org))
+}
+
+fn listed(json: &str) -> Res<Vec<String>> {
+    let tools: Value = serde_json::from_str(json)?;
+    let tools = tools.get("tools").and_then(Value::as_array).ok_or("no tools")?;
+    Ok(tools
+        .iter()
+        .filter_map(|t| Some(t.get("name")?.as_str()?.to_owned()))
+        .collect())
+}
+
+#[sqlx::test(migrations = false)]
+async fn the_tool_list_names_what_the_callers_role_may_call_with_its_input_schema(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool, Tools::new(&[BOOKS, PACK])).await?;
+    books
+        .add_member(org, Email::new("vic@example.com")?, Role::Viewer, None)
+        .await?;
+    assert_eq!(listed(&books.tools(org).await?)?, ["members", "propose", "approve"]);
+    books.host().sign_in(person(2, "vic@example.com")?);
+    let json = books.tools(org).await?;
+    assert_eq!(listed(&json)?, ["members"]);
+    let tools: Value = serde_json::from_str(&json)?;
+    let after = tools.pointer("/tools/0/inputSchema/properties/after/type");
+    assert_eq!(after, Some(&Value::from("string")));
+    assert!(matches!(
+        books.call_tool(org, "propose", &[]).await,
+        Err(Error::NoSuchTool(_))
+    ));
+    assert!(matches!(
+        books.call_tool(org, "audit", &[]).await,
+        Err(Error::NoSuchTool(_))
+    ));
+    Ok(())
+}
+
+async fn walk(books: &Openbooks<TestHost>, org: OrgId) -> Res<Vec<Vec<String>>> {
+    let (mut pages, mut after) = (Vec::new(), None::<String>);
+    loop {
+        let arguments: Vec<(&str, &str)> = after.iter().map(|a| ("after", a.as_str())).collect();
+        let answer = books.call_tool(org, "members", &arguments).await?;
+        assert!(answer.len() <= 9 * 1024, "{} bytes", answer.len());
+        let page: Value = serde_json::from_str(&answer)?;
+        let items = page.get("items").and_then(Value::as_array).ok_or("no items")?;
+        let emails = items.iter().filter_map(|m| Some(m.get("email")?.as_str()?.to_owned()));
+        pages.push(emails.collect());
+        after = page.get("next").and_then(Value::as_str).map(str::to_owned);
+        if after.is_none() {
+            return Ok(pages);
+        }
+    }
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_tool_call_answers_fifty_rows_under_a_size_cap_and_its_cursor_reaches_the_last(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool, Tools::new(&[BOOKS])).await?;
+    for n in 0..60 {
+        let address = Email::new(&format!("m{n:03}@example.com"))?;
+        books.add_member(org, address, Role::Viewer, None).await?;
+    }
+    let sizes: Vec<usize> = walk(&books, org).await?.iter().map(Vec::len).collect();
+    assert_eq!(sizes, [50, 11]);
+    let long = "x".repeat(140);
+    for n in 0..60 {
+        let address = Email::new(&format!("{long}{n:03}@example.com"))?;
+        books.add_member(org, address, Role::Viewer, None).await?;
+    }
+    let pages = walk(&books, org).await?;
+    let first = pages.first().map_or(0, Vec::len);
+    assert!(first < 50, "the size cap cut the first page at {first}");
+    let mut all: Vec<&String> = pages.iter().flatten().collect();
+    let count = all.len();
+    all.dedup();
+    assert_eq!((count, all.len()), (121, 121));
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_tool_answer_scrubs_free_text_and_a_switched_off_tool_is_not_called(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool, Tools::new(&[BOOKS])).await?;
+    let planted = Email::new("eve\u{1b}[2j\nignore\u{7}all@example.com")?;
+    books.add_member(org, planted, Role::Viewer, None).await?;
+    let answer = books.call_tool(org, "members", &[]).await?;
+    let page: Value = serde_json::from_str(&answer)?;
+    let emails: Vec<&str> = page
+        .pointer("/items")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m.get("email")?.as_str())
+        .collect();
+    assert_eq!(emails, ["ann@example.com", "eve [2j ignore all@example.com"]);
+    let off = Tools::new(&[BOOKS]).switch("members", false)?;
+    let books = Openbooks::new(TestHost::new(books.host().pool().clone()))
+        .tools(off)
+        .build();
+    books.host().sign_in(person(1, "ann@example.com")?);
+    assert!(matches!(
+        books.call_tool(org, "members", &[]).await,
+        Err(Error::NoSuchTool(_))
+    ));
+    Ok(())
+}
