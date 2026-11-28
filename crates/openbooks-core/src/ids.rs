@@ -59,3 +59,36 @@ impl Month {
         self.month
     }
 }
+
+macro_rules! token {
+    ($name:ident, $refusal:ident, $doc:literal) => {
+        #[doc = $doc]
+        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(String);
+
+        impl $name {
+            pub fn new(value: &str) -> Result<Self, Refusal> {
+                if (1..=255).contains(&value.len()) && value.chars().all(|c| c.is_ascii_graphic()) {
+                    Ok(Self(value.to_owned()))
+                } else {
+                    Err(Refusal::$refusal)
+                }
+            }
+
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+    };
+}
+
+token!(
+    IdempotencyKey,
+    BadKey,
+    "The caller's key for one create: sent again, it gets the first answer."
+);
+token!(
+    Origin,
+    BadOrigin,
+    "The host's own reference for a change its code made, so it knows its own events."
+);

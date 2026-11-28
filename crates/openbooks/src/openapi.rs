@@ -169,10 +169,25 @@ fn operation(op: &Operation) -> Json {
     if op.kind() == Kind::Read {
         parameters.extend(input.iter().map(|f| parameter(f, "query")));
     }
-    let answer = match op.output() {
-        Schema::Nothing => ("204", map([("description", text("Done, with nothing to answer."))])),
-        shape => ("200", body("The answer.", &shape)),
-    };
+    if op.is_create() {
+        let key = Field {
+            name: "Idempotency-Key",
+            about: "The caller's key for this create: the same key and body get the first answer, another body a 409.",
+            schema: Schema::Maybe(Box::new(Schema::Text)),
+        };
+        parameters.push(parameter(&key, "header"));
+    }
+    let mut answers = vec![match op.output() {
+        Schema::Nothing => (
+            "204".to_owned(),
+            map([("description", text("Done, with nothing to answer."))]),
+        ),
+        shape => ("200".to_owned(), body("The answer.", &shape)),
+    }];
+    if op.is_create() {
+        let reused = map([("description", text("The key was sent with another body."))]);
+        answers.push(("409".to_owned(), reused));
+    }
     let mut json = map([
         ("operationId", text(op.name())),
         ("description", text(op.about())),
@@ -183,7 +198,7 @@ fn operation(op: &Operation) -> Json {
     if op.kind() != Kind::Read && !input.is_empty() {
         json = json.with("requestBody", body("What to write.", &Schema::Object(input)));
     }
-    json.with("responses", map([answer]))
+    json.with("responses", Json::Map(answers))
 }
 
 impl Mount {

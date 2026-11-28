@@ -14,6 +14,8 @@ pub enum Refusal {
     BadMonth,
     BadRole,
     BadEmail,
+    BadKey,
+    BadOrigin,
 }
 
 impl fmt::Display for Refusal {
@@ -28,6 +30,8 @@ impl fmt::Display for Refusal {
             Self::BadMonth => f.write_str("a month is 1 to 12 in a year 1 to 9999"),
             Self::BadRole => f.write_str("a role is owner, accountant, staff or viewer"),
             Self::BadEmail => f.write_str("an email has a name, an @ and a domain"),
+            Self::BadKey => f.write_str("an idempotency key is 1 to 255 visible characters"),
+            Self::BadOrigin => f.write_str("an origin is 1 to 255 visible characters"),
         }
     }
 }

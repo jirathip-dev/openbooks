@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::SystemTime;
 
-use openbooks_core::{Email, ProjectId, UserId, Word};
+use openbooks_core::{Email, Origin, ProjectId, UserId, Word};
 use sqlx::PgConnection;
 
 use crate::Error;
@@ -81,24 +81,31 @@ impl Scope {
     }
 }
 
-/// Who makes the call for the person: they do, an assistant does, or the host's own code does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Who makes the call for the person: they do, an assistant does, or the host's own code does, from its origin.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Via {
     Person,
     Assistant,
-    Host,
+    Host(Origin),
 }
 
 impl Via {
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Person => "person",
             Self::Assistant => "assistant",
-            Self::Host => "host",
+            Self::Host(_) => "host",
         }
     }
 
-    fn keeps(self, word: Word) -> bool {
-        self != Self::Assistant || !matches!(word, Word::Approve | Word::Own)
+    pub fn origin(&self) -> Option<&Origin> {
+        match self {
+            Self::Host(origin) => Some(origin),
+            Self::Person | Self::Assistant => None,
+        }
+    }
+
+    fn keeps(&self, word: Word) -> bool {
+        !matches!(self, Self::Assistant) || !matches!(word, Word::Approve | Word::Own)
     }
 }
