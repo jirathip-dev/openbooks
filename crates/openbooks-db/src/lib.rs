@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use sqlx::PgPool;
-use sqlx::migrate::{MigrateError, Migrator};
+use sqlx::migrate::Migrator;
+use sqlx::{PgConnection, PgPool};
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
@@ -48,21 +48,22 @@ pub fn migrations() -> impl Iterator<Item = Migration> {
     })
 }
 
-/// Applies every migration this build has that the database lacks, each in its own transaction.
-pub async fn migrate(pool: &PgPool) -> Result<(), MigrateError> {
-    MIGRATOR.run(pool).await
+/// Applies, in one transaction, every migration this build has that the database lacks.
+pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtext('openbooks.migrate'))")
+        .execute(&mut *tx)
+        .await?;
+    let applied = applied(&mut tx).await?;
+    for migration in migrations().filter(|m| !applied.contains(&m.version)) {
+        sqlx::raw_sql(migration.sql).execute(&mut *tx).await?;
+    }
+    tx.commit().await
 }
 
 /// Confirms the database holds exactly this build's migrations, however they were applied.
 pub async fn check(pool: &PgPool) -> Result<(), SchemaError> {
-    let applied: BTreeSet<i64> = match sqlx::query_scalar!("SELECT version FROM openbooks.schema_version")
-        .fetch_all(pool)
-        .await
-    {
-        Ok(versions) => versions.into_iter().collect(),
-        Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("42P01") => BTreeSet::new(),
-        Err(e) => return Err(e.into()),
-    };
+    let applied = applied(&mut *pool.acquire().await?).await?;
     let known: BTreeSet<i64> = migrations().map(|m| m.version).collect();
     let missing: Vec<i64> = known.difference(&applied).copied().collect();
     let unknown: Vec<i64> = applied.difference(&known).copied().collect();
@@ -73,4 +74,17 @@ pub async fn check(pool: &PgPool) -> Result<(), SchemaError> {
     } else {
         Ok(())
     }
+}
+
+async fn applied(db: &mut PgConnection) -> Result<BTreeSet<i64>, sqlx::Error> {
+    let exists: Option<bool> = sqlx::query_scalar("SELECT to_regclass('openbooks.schema_version') IS NOT NULL")
+        .fetch_one(&mut *db)
+        .await?;
+    if exists != Some(true) {
+        return Ok(BTreeSet::new());
+    }
+    let versions = sqlx::query_scalar!("SELECT version FROM openbooks.schema_version")
+        .fetch_all(db)
+        .await?;
+    Ok(versions.into_iter().collect())
 }

@@ -10,7 +10,7 @@ fn every_cached_statement_on_a_ledger_table_names_org_id_and_a_planted_one_fails
     let mut queries = Vec::new();
     for entry in fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join(".sqlx"))? {
         let data: serde_json::Value = serde_json::from_str(&fs::read_to_string(entry?.path())?)?;
-        queries.extend(data["query"].as_str().map(str::to_owned));
+        queries.extend(data.get("query").and_then(serde_json::Value::as_str).map(str::to_owned));
     }
     assert!(!queries.is_empty(), "the query cache is empty");
     assert_eq!(unscoped(&queries), Vec::<&String>::new());
