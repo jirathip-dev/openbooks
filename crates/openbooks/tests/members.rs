@@ -77,7 +77,7 @@ async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_wo
     let words = [
         [read, Word::Own, Word::Own, Word::Own, approve].as_slice(),
         &chart,
-        &[read, approve],
+        &[read, approve, read],
     ]
     .concat();
     assert_eq!(BOOKS.operations.iter().map(Operation::word).collect::<Vec<_>>(), words);

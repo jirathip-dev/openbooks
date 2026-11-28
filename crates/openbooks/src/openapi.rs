@@ -4,7 +4,9 @@ use openbooks_core::{OrgId, Quantity};
 
 use crate::api::{Field, Mount, Operation, Schema, Shape};
 
-enum Json {
+/// A JSON value as the books write it: the `OpenAPI` document or a tool's answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Json {
     Bool(bool),
     Num(i64),
     Str(String),
@@ -12,16 +14,16 @@ enum Json {
     Map(Vec<(String, Json)>),
 }
 
-fn text(value: &str) -> Json {
+pub(crate) fn text(value: &str) -> Json {
     Json::Str(value.to_owned())
 }
 
-fn map<const N: usize>(pairs: [(&str, Json); N]) -> Json {
+pub(crate) fn map<const N: usize>(pairs: [(&str, Json); N]) -> Json {
     Json::Map(pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
 }
 
 impl Json {
-    fn with(mut self, key: &str, value: Json) -> Self {
+    pub(crate) fn with(mut self, key: &str, value: Json) -> Self {
         if let Self::Map(pairs) = &mut self {
             pairs.push((key.to_owned(), value));
         }
@@ -129,7 +131,7 @@ fn schema(shape: &Schema) -> Json {
     }
 }
 
-fn object(fields: &[Field]) -> Json {
+pub(crate) fn object(fields: &[Field]) -> Json {
     let required = fields.iter().filter(|f| !matches!(f.schema, Schema::Maybe(_)));
     map([
         ("type", text("object")),
@@ -233,9 +235,12 @@ impl Mount {
             ),
             ("paths", Json::Map(paths.collect())),
         ]);
-        let mut out = String::new();
-        doc.write(&mut out, 0);
-        out.push('\n');
-        out
+        render(&doc) + "\n"
     }
+}
+
+pub(crate) fn render(json: &Json) -> String {
+    let mut out = String::new();
+    json.write(&mut out, 0);
+    out
 }

@@ -231,6 +231,9 @@ async fn the_catalogue_needs_approve_to_change_and_read_to_list(pool: PgPool) ->
         books.add_member(org, Email::new(&address)?, role, None).await?;
         books.host().sign_in(person(n, &address)?);
         assert_eq!(books.items(org, None).await?.items.len(), 1);
+        let listed: serde_json::Value = serde_json::from_str(&books.call_tool(org, "items", &[]).await?)?;
+        let expected = serde_json::json!({"items": [{"code": "W1", "name": "Item W1", "kind": "stock", "unit": "EA", "sales_account": "4000", "sales_tax": "T7", "weight": 12_500}]});
+        assert_eq!(listed, expected);
         let unit = Unit {
             code: format!("U{n}"),
             name: "Unit".to_owned(),

@@ -6,8 +6,10 @@ use openbooks_db::chart;
 use openbooks_db::items::{self, Item, Unit};
 use sqlx::PgConnection;
 
+use crate::chart::{maybe, rows};
 use crate::members::{PAGE, Packs, pack_of, paged};
-use crate::{Error, Field, Host, Openbooks, Operation, Page, Schema, Shape};
+use crate::openapi::{Json, map, text};
+use crate::{Ask, Error, Field, Host, Openbooks, Operation, Page, Reply, Schema, Shape};
 
 pub(crate) const UNITS: Operation = crate::read!("units", Word::Read, "Lists the company's units by code, a page at a time.", {
     after: Option<String> = "The cursor from the last page's next; absent for the first page.",
@@ -200,5 +202,49 @@ impl<H: Host + 'static> Openbooks<H> {
             })
         })
         .await
+    }
+}
+
+fn unit(u: &Unit) -> Json {
+    map([("code", text(&u.code)), ("name", text(&u.name))])
+}
+
+fn quantity(json: Json, key: &str, value: Option<Quantity>) -> Json {
+    match value {
+        Some(q) => json.with(key, Json::Num(q.0)),
+        None => json,
+    }
+}
+
+fn item(i: &Item) -> Json {
+    let mut json = map([
+        ("code", text(&i.code)),
+        ("name", text(&i.name)),
+        ("kind", text(i.kind.as_str())),
+        ("unit", text(&i.unit)),
+    ]);
+    for (key, value) in [
+        ("sales_account", &i.sales_account),
+        ("purchase_account", &i.purchase_account),
+        ("sales_tax", &i.sales_tax),
+        ("purchase_tax", &i.purchase_tax),
+        ("host_ref", &i.host_ref),
+    ] {
+        json = maybe(json, key, value.as_ref());
+    }
+    quantity(quantity(json, "weight", i.weight), "volume", i.volume)
+}
+
+pub(crate) async fn serve(ask: Ask<'_>) -> Result<Reply, Error> {
+    let (n, after, org) = (i64::from(ask.rows()), ask.after()?, ask.org);
+    let after = after.as_deref();
+    match ask.tool {
+        "units" => Ok(rows(&items::units(ask.db, org, after, n).await?, unit, |u| {
+            u.code.clone()
+        })),
+        "items" => Ok(rows(&items::items(ask.db, org, after, n).await?, item, |i| {
+            i.code.clone()
+        })),
+        other => Err(Error::NoSuchTool(other.to_owned())),
     }
 }
