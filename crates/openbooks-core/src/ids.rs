@@ -24,6 +24,7 @@ macro_rules! id {
 
 id!(OrgId, "An organisation that keeps a set of books.");
 id!(UserId, "A person who signs in.");
+id!(ProjectId, "A project whose costs and income are tracked apart.");
 
 /// Which book an entry belongs to: the general ledger or a sub-ledger over it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

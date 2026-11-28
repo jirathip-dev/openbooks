@@ -12,6 +12,8 @@ pub enum Refusal {
     BadRate,
     BadId,
     BadMonth,
+    BadRole,
+    BadEmail,
 }
 
 impl fmt::Display for Refusal {
@@ -24,6 +26,8 @@ impl fmt::Display for Refusal {
             Self::BadRate => f.write_str("a rate is above zero, and one between a currency and itself"),
             Self::BadId => f.write_str("an id is above zero"),
             Self::BadMonth => f.write_str("a month is 1 to 12 in a year 1 to 9999"),
+            Self::BadRole => f.write_str("a role is owner, accountant, staff or viewer"),
+            Self::BadEmail => f.write_str("an email has a name, an @ and a domain"),
         }
     }
 }
