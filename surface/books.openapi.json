@@ -1413,6 +1413,427 @@
           }
         }
       }
+    },
+    "/books/{org}/contacts": {
+      "get": {
+        "operationId": "contacts",
+        "description": "Lists the customers, suppliers and employees by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "name",
+                          "kind"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The contact's code."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "customer",
+                              "supplier",
+                              "customer_and_supplier",
+                              "employee"
+                            ],
+                            "description": "Customer, supplier, both, or employee."
+                          },
+                          "address": {
+                            "type": "string",
+                            "description": "Its address."
+                          },
+                          "email": {
+                            "type": "string",
+                            "format": "email",
+                            "description": "Its email address."
+                          },
+                          "phone": {
+                            "type": "string",
+                            "description": "Its phone number."
+                          },
+                          "terms": {
+                            "type": "string",
+                            "description": "The code of the payment terms its documents default to."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "description": "The currency its documents default to."
+                          },
+                          "withholding": {
+                            "type": "string",
+                            "description": "The code of the tax its settlements withhold by default."
+                          },
+                          "host_ref": {
+                            "type": "string",
+                            "description": "The host's reference, when the host keeps it."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/contact.save": {
+      "post": {
+        "operationId": "contact.save",
+        "description": "Adds a contact, or changes the one with its code; the company's pack checks a customer or supplier.",
+        "x-openbooks-word": "draft",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "name",
+                  "kind"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The contact's code, unique in the company."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "supplier",
+                      "customer_and_supplier",
+                      "employee"
+                    ],
+                    "description": "Customer, supplier, both, or employee, who holds only a name and how to reach them."
+                  },
+                  "address": {
+                    "type": "string",
+                    "description": "Its address."
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Its email address."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Its phone number."
+                  },
+                  "terms": {
+                    "type": "string",
+                    "description": "The code of the payment terms its documents default to."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "The currency its documents default to, by code."
+                  },
+                  "withholding": {
+                    "type": "string",
+                    "description": "The code of the tax its settlements withhold by default."
+                  },
+                  "tax_id": {
+                    "type": "string",
+                    "description": "Its tax id, as plain text."
+                  },
+                  "branch": {
+                    "type": "string",
+                    "description": "Its branch, as plain text."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/contact.sync": {
+      "post": {
+        "operationId": "contact.sync",
+        "description": "Keeps a contact in step with the host's own record, by its reference; the company's pack checks a customer or supplier.",
+        "x-openbooks-word": "draft",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "host_ref",
+                  "code",
+                  "name",
+                  "kind"
+                ],
+                "properties": {
+                  "host_ref": {
+                    "type": "string",
+                    "description": "The host's reference for the contact."
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "The contact's code, unique in the company."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "supplier",
+                      "customer_and_supplier",
+                      "employee"
+                    ],
+                    "description": "Customer, supplier, both, or employee, who holds only a name and how to reach them."
+                  },
+                  "address": {
+                    "type": "string",
+                    "description": "Its address."
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Its email address."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Its phone number."
+                  },
+                  "terms": {
+                    "type": "string",
+                    "description": "The code of the payment terms its documents default to."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "The currency its documents default to, by code."
+                  },
+                  "withholding": {
+                    "type": "string",
+                    "description": "The code of the tax its settlements withhold by default."
+                  },
+                  "tax_id": {
+                    "type": "string",
+                    "description": "Its tax id, as plain text."
+                  },
+                  "branch": {
+                    "type": "string",
+                    "description": "Its branch, as plain text."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/contact.identity": {
+      "get": {
+        "operationId": "contact.identity",
+        "description": "Shows a person a contact's tax id, branch and bank account.",
+        "x-openbooks-word": "draft",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "description": "The contact's code.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [],
+                  "properties": {
+                    "tax_id": {
+                      "type": "string",
+                      "x-openbooks-tier": "never",
+                      "description": "Its tax id, as plain text."
+                    },
+                    "branch": {
+                      "type": "string",
+                      "x-openbooks-tier": "never",
+                      "description": "Its branch, as plain text."
+                    },
+                    "bank_account": {
+                      "type": "string",
+                      "x-openbooks-tier": "never",
+                      "description": "The bank account it is paid to."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/contact.bank": {
+      "post": {
+        "operationId": "contact.bank",
+        "description": "Sets the bank account a customer or supplier is paid to; an employee has none.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The contact's code."
+                  },
+                  "bank_account": {
+                    "type": "string",
+                    "description": "The bank account; absent to clear it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
     }
   }
 }

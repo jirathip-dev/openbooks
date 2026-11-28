@@ -5,7 +5,7 @@ use sqlx::{PgConnection, query, query_as, query_scalar};
 
 use crate::refused;
 
-/// What an audit row is about: the company, a member by email, an account or terms by code, a role, the dimension kinds, or a value of the kind in a slot by its code or host reference.
+/// What an audit row is about: the company, a member by email, an account or terms by code, a role, the dimension kinds, or a value of the kind in a slot or a contact by its code or host reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Record {
     Company,
@@ -16,6 +16,8 @@ pub enum Record {
     Value(u16, String),
     Synced(u16, String),
     Terms(String),
+    Contact(String),
+    SyncedContact(String),
 }
 
 impl Record {
@@ -30,6 +32,8 @@ impl Record {
             Self::Value(slot, code) => format!("value:{slot}:{code}"),
             Self::Synced(slot, host_ref) => format!("value:{slot}:host:{host_ref}"),
             Self::Terms(code) => format!("terms:{code}"),
+            Self::Contact(code) => format!("contact:{code}"),
+            Self::SyncedContact(host_ref) => format!("contact:host:{host_ref}"),
         }
     }
 }
@@ -122,6 +126,8 @@ const VALUE: &str = "SELECT (to_jsonb(v) - 'org_id')::text FROM ledger.dimension
      JOIN ledger.dimension k ON k.org_id = v.org_id AND k.kind_id = v.kind_id AND NOT k.removed \
      WHERE v.org_id = $1 AND k.slot = $2";
 
+const CONTACT: &str = "SELECT (to_jsonb(c) - 'org_id')::text FROM ledger.contact c WHERE org_id = $1 AND";
+
 /// The record's state now as JSON; none if it does not exist.
 pub async fn snapshot(db: &mut PgConnection, org: OrgId, record: &Record) -> Result<Option<String>, sqlx::Error> {
     let (sql, key, slot): (String, Option<&str>, Option<i16>) = match record {
@@ -153,6 +159,8 @@ pub async fn snapshot(db: &mut PgConnection, org: OrgId, record: &Record) -> Res
             Some(code.as_str()),
             None,
         ),
+        Record::Contact(code) => (format!("{CONTACT} code = $2"), Some(code.as_str()), None),
+        Record::SyncedContact(host_ref) => (format!("{CONTACT} host_ref = $2"), Some(host_ref.as_str()), None),
     };
     let found = match (key, slot) {
         (Some(key), Some(slot)) => query_scalar::<_, Option<String>>(&sql)

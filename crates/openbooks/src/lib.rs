@@ -1,5 +1,6 @@
 mod api;
 mod chart;
+mod contacts;
 mod error;
 mod hooks;
 mod host;
@@ -17,6 +18,7 @@ pub use members::{BOOKS, Builder, Openbooks};
 pub use openbooks_db::Migration;
 pub use openbooks_db::audit::{AuditRow, Filter, Record};
 pub use openbooks_db::chart::{Account, Dimension, DimensionValue, RoleAccount, Terms};
+pub use openbooks_db::contacts::{Contact, Identity};
 pub use openbooks_db::events::Event;
 pub use openbooks_db::members::Member;
 pub use pack::{AccountRole, BookNames, ChartAccount, NoPack, Pack, Series, Template};

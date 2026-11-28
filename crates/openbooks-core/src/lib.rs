@@ -1,5 +1,6 @@
 mod access;
 mod chart;
+mod contact;
 mod ids;
 mod money;
 mod refusal;
@@ -8,6 +9,7 @@ mod tax;
 
 pub use access::{Email, Role, Word};
 pub use chart::AccountType;
+pub use contact::ContactKind;
 pub use ids::{BookKind, Date, IdempotencyKey, Month, OrgId, Origin, ProjectId, UserId};
 pub use money::{Currency, Money, Valued};
 pub use refusal::Refusal;
