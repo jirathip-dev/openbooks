@@ -54,7 +54,7 @@ fn the_arch_config_passes_alone_and_fails_each_fixture_with_its_rule() -> Res<()
         .map(|e| e.map(|e| e.path()))
         .collect::<Result<Vec<_>, _>>()?;
     cases.sort();
-    assert_eq!(cases.len(), 14);
+    assert_eq!(cases.len(), 16);
     for case in cases {
         let name = case.file_name().and_then(|n| n.to_str()).unwrap_or_default();
         let expect = fs::read_to_string(case.join("expect"))?;
