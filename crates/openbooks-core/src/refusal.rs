@@ -21,6 +21,7 @@ pub enum Refusal {
     BadOrigin,
     BadTime,
     BadAccountType,
+    BadItemKind,
 }
 
 impl fmt::Display for Refusal {
@@ -42,6 +43,7 @@ impl fmt::Display for Refusal {
             Self::BadOrigin => f.write_str("an origin is 1 to 255 visible characters"),
             Self::BadTime => f.write_str("a time is from 1970 on, to the microsecond"),
             Self::BadAccountType => f.write_str("an account type is asset, liability, equity, income or expense"),
+            Self::BadItemKind => f.write_str("an item kind is stock, non_stock or service"),
         }
     }
 }

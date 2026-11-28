@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use openbooks_core::OrgId;
+use openbooks_core::{OrgId, Quantity};
 
 use crate::api::{Field, Mount, Operation, Schema, Shape};
 
@@ -71,24 +71,25 @@ fn quote(out: &mut String, value: &str) {
     out.push('"');
 }
 
+fn integer(format: &str, minimum: i64) -> Json {
+    map([
+        ("type", text("integer")),
+        ("format", text(format)),
+        ("minimum", Json::Num(minimum)),
+    ])
+}
+
 fn schema(shape: &Schema) -> Json {
     match shape {
         Schema::Nothing => map([]),
         Schema::Text => map([("type", text("string"))]),
         Schema::Flag => map([("type", text("boolean"))]),
-        Schema::Whole => map([
-            ("type", text("integer")),
-            ("format", text("int32")),
-            ("minimum", Json::Num(0)),
-        ]),
+        Schema::Whole => integer("int32", 0),
+        Schema::Quantity => integer("int64", 0).with("x-openbooks-scale", Json::Num(Quantity::SCALE)),
         Schema::Day => map([("type", text("string")), ("format", text("date"))]),
         Schema::Email => map([("type", text("string")), ("format", text("email"))]),
         Schema::Instant => map([("type", text("string")), ("format", text("date-time"))]),
-        Schema::Id => map([
-            ("type", text("integer")),
-            ("format", text("int64")),
-            ("minimum", Json::Num(1)),
-        ]),
+        Schema::Id => integer("int64", 1),
         Schema::Words(words) => map([
             ("type", text("string")),
             ("enum", Json::List(words.iter().map(|w| text(w)).collect())),

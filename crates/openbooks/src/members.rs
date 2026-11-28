@@ -13,11 +13,12 @@ use crate::chart::{
     ACCOUNT_ROLES, ACCOUNTS, ADD_DIMENSION, DIMENSIONS, GIVE_ROLE, REMOVE_DIMENSION, RENAME_DIMENSION, REQUIRE,
     SAVE_ACCOUNT, SAVE_TERMS, SAVE_VALUE, SYNC_VALUE, TERMS, VALUES,
 };
+use crate::items::{ITEMS, SAVE_ITEM, SAVE_UNIT, SYNC_ITEM, UNITS};
 use crate::{Error, Hooks, Host, Mount, NoPack, Operation, Pack, Page, SignedIn, Work};
 
-type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
+pub(crate) type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 
-/// The member, chart, dimension and terms operations, mounted under `books`.
+/// The member, chart, dimension, terms, unit and item operations, mounted under `books`.
 pub const BOOKS: Mount = Mount {
     key: "books",
     operations: &[
@@ -40,6 +41,11 @@ pub const BOOKS: Mount = Mount {
         SYNC_VALUE,
         TERMS,
         SAVE_TERMS,
+        UNITS,
+        SAVE_UNIT,
+        ITEMS,
+        SAVE_ITEM,
+        SYNC_ITEM,
     ],
 };
 

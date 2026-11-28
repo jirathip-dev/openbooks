@@ -175,12 +175,17 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
             ("dimension_value.sync", "approve", false),
             ("dimension_values", "read", true),
             ("dimensions", "read", true),
+            ("item.save", "approve", false),
+            ("item.sync", "approve", false),
+            ("items", "read", true),
             ("member.add", "own", false),
             ("member.remove", "own", false),
             ("member.role", "own", false),
             ("members", "read", true),
             ("terms", "read", true),
-            ("terms.save", "approve", false)
+            ("terms.save", "approve", false),
+            ("unit.save", "approve", false),
+            ("units", "read", true)
         ]
     );
     let surface = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../surface/books.openapi.json");

@@ -1413,6 +1413,453 @@
           }
         }
       }
+    },
+    "/books/{org}/units": {
+      "get": {
+        "operationId": "units",
+        "description": "Lists the company's units by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "name"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The unit's code."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/unit.save": {
+      "post": {
+        "operationId": "unit.save",
+        "description": "Adds a unit to the company's list, or renames the one with its code.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "name"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The unit's code, unique in the company."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/items": {
+      "get": {
+        "operationId": "items",
+        "description": "Lists the catalogue's goods and services by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "name",
+                          "kind",
+                          "unit"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The item's code."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "stock",
+                              "non_stock",
+                              "service"
+                            ],
+                            "description": "Whether it is stock, non-stock goods or a service."
+                          },
+                          "unit": {
+                            "type": "string",
+                            "description": "The code of the unit it is counted in."
+                          },
+                          "sales_account": {
+                            "type": "string",
+                            "description": "The account a sale of it goes to by default."
+                          },
+                          "purchase_account": {
+                            "type": "string",
+                            "description": "The account a purchase of it goes to by default."
+                          },
+                          "sales_tax": {
+                            "type": "string",
+                            "description": "The tax code a sale of it carries by default."
+                          },
+                          "purchase_tax": {
+                            "type": "string",
+                            "description": "The tax code a purchase of it carries by default."
+                          },
+                          "weight": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0,
+                            "x-openbooks-scale": 10000,
+                            "description": "The weight of one unit in kilograms."
+                          },
+                          "volume": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0,
+                            "x-openbooks-scale": 10000,
+                            "description": "The volume of one unit in litres."
+                          },
+                          "host_ref": {
+                            "type": "string",
+                            "description": "The host's reference, when the host keeps it."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/item.save": {
+      "post": {
+        "operationId": "item.save",
+        "description": "Adds an item to the catalogue, or changes the one with its code unless the host keeps it; one on a posted line keeps its kind and unit.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "name",
+                  "kind",
+                  "unit"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The item's code, unique in the catalogue."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "stock",
+                      "non_stock",
+                      "service"
+                    ],
+                    "description": "Whether it is stock, non-stock goods or a service."
+                  },
+                  "unit": {
+                    "type": "string",
+                    "description": "The code of the one unit it is counted in."
+                  },
+                  "sales_account": {
+                    "type": "string",
+                    "description": "The account a sale of it goes to by default."
+                  },
+                  "purchase_account": {
+                    "type": "string",
+                    "description": "The account a purchase of it goes to by default."
+                  },
+                  "sales_tax": {
+                    "type": "string",
+                    "description": "The tax code a sale of it carries by default."
+                  },
+                  "purchase_tax": {
+                    "type": "string",
+                    "description": "The tax code a purchase of it carries by default."
+                  },
+                  "weight": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0,
+                    "x-openbooks-scale": 10000,
+                    "description": "The weight of one unit in kilograms."
+                  },
+                  "volume": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0,
+                    "x-openbooks-scale": 10000,
+                    "description": "The volume of one unit in litres."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/item.sync": {
+      "post": {
+        "operationId": "item.sync",
+        "description": "Keeps an item in step with the host's own record, by its reference; one on a posted line keeps its kind and unit.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "host_ref",
+                  "code",
+                  "name",
+                  "kind",
+                  "unit"
+                ],
+                "properties": {
+                  "host_ref": {
+                    "type": "string",
+                    "description": "The host's reference for the item."
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "The item's code, unique in the catalogue."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "stock",
+                      "non_stock",
+                      "service"
+                    ],
+                    "description": "Whether it is stock, non-stock goods or a service."
+                  },
+                  "unit": {
+                    "type": "string",
+                    "description": "The code of the one unit it is counted in."
+                  },
+                  "sales_account": {
+                    "type": "string",
+                    "description": "The account a sale of it goes to by default."
+                  },
+                  "purchase_account": {
+                    "type": "string",
+                    "description": "The account a purchase of it goes to by default."
+                  },
+                  "sales_tax": {
+                    "type": "string",
+                    "description": "The tax code a sale of it carries by default."
+                  },
+                  "purchase_tax": {
+                    "type": "string",
+                    "description": "The tax code a purchase of it carries by default."
+                  },
+                  "weight": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0,
+                    "x-openbooks-scale": 10000,
+                    "description": "The weight of one unit in kilograms."
+                  },
+                  "volume": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0,
+                    "x-openbooks-scale": 10000,
+                    "description": "The volume of one unit in litres."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
     }
   }
 }
