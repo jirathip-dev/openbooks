@@ -18,7 +18,9 @@ async fn a_fresh_database_replays_to_the_same_dump_twice(pool: PgPool) -> Res<()
     migrate(&pool).await?;
     migrate(&pool).await?;
     check(&pool).await?;
-    let name = format!("{}_host", pool.connect_options().get_database().unwrap_or("openbooks"));
+    let name: String = query_scalar("SELECT 'host_' || md5(current_database())")
+        .fetch_one(&pool)
+        .await?;
     run(&pool, &format!("CREATE DATABASE {name}")).await?;
     let host = PgPool::connect_with(pool.connect_options().as_ref().clone().database(&name)).await?;
     for migration in migrations() {
