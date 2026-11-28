@@ -15,7 +15,6 @@ pub type Work<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'a
 pub trait Host: Send + Sync {
     fn who(&self) -> Option<SignedIn>;
 
-    /// Runs the work in one transaction the host opens and ends.
     fn transact<T, F>(&self, work: F) -> impl Future<Output = Result<T, Error>> + Send
     where
         T: Send,
