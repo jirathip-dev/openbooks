@@ -162,6 +162,7 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
     assert_eq!(
         declared,
         [
+            ("audit", "approve", false),
             ("member.add", "own", false),
             ("member.remove", "own", false),
             ("member.role", "own", false),

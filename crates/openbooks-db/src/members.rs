@@ -1,4 +1,6 @@
-use openbooks_core::{Currency, Email, OrgId, Refusal, Role, UserId};
+use openbooks_core::{Currency, Email, OrgId, Role, UserId};
+
+use crate::refused;
 use sqlx::{PgConnection, query, query_as, query_scalar};
 
 /// One person on a company's member list.
@@ -9,24 +11,9 @@ pub struct Member {
     pub role: Role,
 }
 
-/// The one audit row a write leaves.
-#[derive(Debug, Clone, Copy)]
-pub struct Audit<'a> {
-    pub id: &'a str,
-    pub at_micros: i64,
-    pub user: UserId,
-    pub via: &'a str,
-    pub action: &'a str,
-    pub detail: &'a str,
-}
-
 type Row = (String, Option<i64>, String);
 
 const COLUMNS: &str = "email, user_id, role";
-
-fn refused(refusal: Refusal) -> sqlx::Error {
-    sqlx::Error::Decode(Box::new(refusal))
-}
 
 fn member((email, user, role): Row) -> Result<Member, sqlx::Error> {
     Ok(Member {
@@ -152,21 +139,4 @@ pub async fn remove(db: &mut PgConnection, org: OrgId, email: &Email) -> Result<
         .execute(db)
         .await
         .map(drop)
-}
-
-pub async fn audit(db: &mut PgConnection, org: OrgId, row: Audit<'_>) -> Result<(), sqlx::Error> {
-    query(
-        "INSERT INTO ledger.audit (org_id, audit_id, at, user_id, via, action, detail) \
-         VALUES ($1, $2, timestamptz 'epoch' + $3 * interval '1 microsecond', $4, $5, $6, $7)",
-    )
-    .bind(org.get())
-    .bind(row.id)
-    .bind(row.at_micros)
-    .bind(row.user.get())
-    .bind(row.via)
-    .bind(row.action)
-    .bind(row.detail)
-    .execute(db)
-    .await
-    .map(drop)
 }

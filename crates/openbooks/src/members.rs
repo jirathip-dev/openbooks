@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::time::SystemTime;
 
-use openbooks_core::{Currency, Email, IdempotencyKey, OrgId, Refusal, Role, Word};
+use openbooks_core::{Currency, Email, IdempotencyKey, OrgId, Refusal, Role, UserId, Word};
+use openbooks_db::audit::{self, Audit, AuditRow, Filter, Record};
 use openbooks_db::events::{self, Claim};
-use openbooks_db::members::{self, Audit, Member};
+use openbooks_db::members::{self, Member};
 use sqlx::PgConnection;
 
 use crate::{Error, Hooks, Host, Mount, Operation, Page, SignedIn, Work};
@@ -11,7 +12,7 @@ use crate::{Error, Hooks, Host, Mount, Operation, Page, SignedIn, Work};
 /// The member operations, mounted under `books`.
 pub const BOOKS: Mount = Mount {
     key: "books",
-    operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER],
+    operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER, AUDIT],
 };
 
 const PAGE: u16 = 100;
@@ -34,6 +35,15 @@ const CHANGE_ROLE: Operation = crate::closed!("member.role", Word::Own, "Gives a
 const REMOVE_MEMBER: Operation = crate::closed!("member.remove", Word::Own, "Takes a member off the list; the last owner stays.", {
     email: Email = "The member's address.",
 } -> ());
+
+const AUDIT: Operation = crate::closed_read!("audit", Word::Approve, "Lists the company's audit rows, oldest first, a page at a time.", {
+    record: Option<String> = "Only the rows on this record, by its key.",
+    user: Option<UserId> = "Only the changes made for this person.",
+    action: Option<String> = "Only this kind of change.",
+    from: Option<SystemTime> = "Only the changes saved at or after this time.",
+    until: Option<SystemTime> = "Only the changes saved before this time.",
+    after: Option<String> = "The cursor from the last page's next; absent for the first page.",
+} -> Page<AuditRow>);
 
 /// The books, embedded in a host.
 pub struct Openbooks<H> {
@@ -99,7 +109,8 @@ impl<H: Host + 'static> Openbooks<H> {
                     let org = members::create_org(db, &name, base).await?;
                     members::add(db, org, &call.signed.email, Role::Owner).await?;
                     members::tie(db, org, &call.signed.email, call.signed.user).await?;
-                    call.record(db, org, "company.create", &name).await?;
+                    call.record(db, org, "company.create", &name, &Record::Company, None)
+                        .await?;
                     call.remember(db, key.as_ref(), org.store()).await?;
                     Ok(org)
                 })
@@ -111,24 +122,28 @@ impl<H: Host + 'static> Openbooks<H> {
 
     /// One page of the company's members by email, from just after the cursor `after`.
     pub async fn members(&self, org: OrgId, after: Option<String>) -> Result<Page<Member>, Error> {
-        let call = self.call()?;
-        let page = self
-            .host
-            .transact(move |db| {
-                Box::pin(async move {
-                    call.admit(db, org, MEMBERS).await?;
-                    let mut items = members::members(db, org, after.as_deref(), i64::from(PAGE) + 1).await?;
-                    let more = items.len() > usize::from(PAGE);
-                    items.truncate(usize::from(PAGE));
-                    let next = more
-                        .then(|| items.last().map(|m| m.email.as_str().to_owned()))
-                        .flatten();
-                    Ok(Page { items, next })
-                })
+        self.read(org, MEMBERS, move |db| {
+            Box::pin(async move {
+                let items = members::members(db, org, after.as_deref(), i64::from(PAGE) + 1).await?;
+                Ok(paged(items, |m| m.email.as_str().to_owned()))
             })
-            .await?;
-        self.deliver(org).await.ok();
-        Ok(page)
+        })
+        .await
+    }
+
+    /// One page of the company's audit rows the filter keeps, from just after the cursor `after`; Owners and Accountants only.
+    pub async fn audit(&self, org: OrgId, filter: Filter, after: Option<String>) -> Result<Page<AuditRow>, Error> {
+        let after = after
+            .map(|a| a.parse::<i64>())
+            .transpose()
+            .map_err(|_| Refusal::BadId)?;
+        self.read(org, AUDIT, move |db| {
+            Box::pin(async move {
+                let items = audit::list(db, org, &filter, after, i64::from(PAGE) + 1).await?;
+                Ok(paged(items, |row| row.seq.to_string()))
+            })
+        })
+        .await
     }
 
     /// Adds a person by email with a role; sent again with its key, it adds them once.
@@ -140,7 +155,8 @@ impl<H: Host + 'static> Openbooks<H> {
         key: Option<IdempotencyKey>,
     ) -> Result<(), Error> {
         let detail = format!("{} as {}", email.as_str(), role.as_str());
-        self.write(org, ADD_MEMBER, detail, key, move |db| {
+        let record = Record::Member(email.clone());
+        self.write(org, ADD_MEMBER, record, detail, key, move |db| {
             Box::pin(async move {
                 members::lock_org(db, org).await?;
                 if members::add(db, org, &email, role).await? {
@@ -155,7 +171,8 @@ impl<H: Host + 'static> Openbooks<H> {
 
     pub async fn change_role(&self, org: OrgId, email: Email, role: Role) -> Result<(), Error> {
         let detail = format!("{} to {}", email.as_str(), role.as_str());
-        self.write(org, CHANGE_ROLE, detail, None, move |db| {
+        let record = Record::Member(email.clone());
+        self.write(org, CHANGE_ROLE, record, detail, None, move |db| {
             Box::pin(async move {
                 keep_an_owner(db, org, &email, role != Role::Owner).await?;
                 Ok(members::set_role(db, org, &email, role).await?)
@@ -166,7 +183,8 @@ impl<H: Host + 'static> Openbooks<H> {
 
     pub async fn remove_member(&self, org: OrgId, email: Email) -> Result<(), Error> {
         let detail = email.as_str().to_owned();
-        self.write(org, REMOVE_MEMBER, detail, None, move |db| {
+        let record = Record::Member(email.clone());
+        self.write(org, REMOVE_MEMBER, record, detail, None, move |db| {
             Box::pin(async move {
                 keep_an_owner(db, org, &email, true).await?;
                 Ok(members::remove(db, org, &email).await?)
@@ -203,10 +221,30 @@ impl<H: Host + 'static> Openbooks<H> {
         })
     }
 
+    async fn read<T, F>(&self, org: OrgId, op: Operation, work: F) -> Result<T, Error>
+    where
+        T: Send + 'static,
+        F: for<'c> FnOnce(&'c mut PgConnection) -> Work<'c, T> + Send + 'static,
+    {
+        let call = self.call()?;
+        let out = self
+            .host
+            .transact(move |db| {
+                Box::pin(async move {
+                    call.admit(db, org, op).await?;
+                    work(&mut *db).await
+                })
+            })
+            .await?;
+        self.deliver(org).await.ok();
+        Ok(out)
+    }
+
     async fn write<T, F>(
         &self,
         org: OrgId,
         op: Operation,
+        record: Record,
         detail: String,
         key: Option<IdempotencyKey>,
         work: F,
@@ -225,8 +263,10 @@ impl<H: Host + 'static> Openbooks<H> {
                     if let Some(out) = call.replay(db, key.as_ref(), &request).await? {
                         return Ok(out);
                     }
+                    members::lock_org(db, org).await?;
+                    let before = audit::snapshot(db, org, &record).await?;
                     let out = work(&mut *db).await?;
-                    call.record(db, org, op.name(), &detail).await?;
+                    call.record(db, org, op.name(), &detail, &record, before).await?;
                     call.remember(db, key.as_ref(), out.store()).await?;
                     Ok(out)
                 })
@@ -235,6 +275,13 @@ impl<H: Host + 'static> Openbooks<H> {
         self.deliver(org).await.ok();
         Ok(out)
     }
+}
+
+fn paged<T>(mut items: Vec<T>, cursor: impl Fn(&T) -> String) -> Page<T> {
+    let more = items.len() > usize::from(PAGE);
+    items.truncate(usize::from(PAGE));
+    let next = more.then(|| items.last().map(cursor)).flatten();
+    Page { items, next }
 }
 
 trait Answer: Sized {
@@ -285,8 +332,11 @@ impl<H: Host> Call<H> {
         if let Some(member) = members::member_by_user(db, org, signed.user).await? {
             return Ok(member);
         }
+        let record = Record::Member(signed.email.clone());
+        let before = audit::snapshot(db, org, &record).await?;
         if let Some(member) = members::tie(db, org, &signed.email, signed.user).await? {
-            self.record(db, org, "member.join", signed.email.as_str()).await?;
+            let detail = signed.email.as_str();
+            self.record(db, org, "member.join", detail, &record, before).await?;
             return Ok(member);
         }
         let name = self.host.names(&[signed.user]).remove(&signed.user);
@@ -319,24 +369,28 @@ impl<H: Host> Call<H> {
         Ok(events::answer(db, self.signed.user, key, out.as_deref()).await?)
     }
 
-    async fn record(&self, db: &mut PgConnection, org: OrgId, action: &str, detail: &str) -> Result<(), Error> {
+    async fn record(
+        &self,
+        db: &mut PgConnection,
+        org: OrgId,
+        action: &str,
+        detail: &str,
+        record: &Record,
+        before: Option<String>,
+    ) -> Result<(), Error> {
         members::lock_org(db, org).await?;
-        let since = self
-            .host
-            .now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| Error::Host(e.to_string()))?;
-        let at_micros = i64::try_from(since.as_micros()).map_err(|e| Error::Host(e.to_string()))?;
         let id = self.host.new_id();
         let row = Audit {
             id: &id,
-            at_micros,
+            at: self.host.now(),
             user: self.signed.user,
             via: self.signed.via.as_str(),
             action,
             detail,
+            record,
+            before: before.as_deref(),
         };
-        members::audit(db, org, row).await?;
+        audit::write(db, org, row).await?;
         let event = events::write(db, org, &id, action, detail, self.signed.via.origin()).await?;
         self.hooks.before_commit(db, &event).await
     }
