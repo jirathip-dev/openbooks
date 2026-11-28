@@ -135,7 +135,7 @@ async fn a_tool_call_answers_fifty_rows_under_a_size_cap_and_its_cursor_reaches_
     }
     let sizes: Vec<usize> = walk(&books, org).await?.iter().map(Vec::len).collect();
     assert_eq!(sizes, [50, 11]);
-    let long = "x".repeat(140);
+    let long = "x".repeat(180);
     for n in 0..60 {
         let address = Email::new(&format!("{long}{n:03}@example.com"))?;
         books.add_member(org, address, Role::Viewer, None).await?;
