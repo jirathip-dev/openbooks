@@ -4,7 +4,9 @@ use openbooks_core::OrgId;
 
 use crate::api::{Field, Mount, Operation, Schema, Shape};
 
-pub(crate) enum Json {
+/// A JSON value as the books write it: the `OpenAPI` document or a tool's answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Json {
     Bool(bool),
     Num(i64),
     Str(String),

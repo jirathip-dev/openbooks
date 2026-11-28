@@ -230,7 +230,16 @@ const QUIET: Operation = openbooks::write!("quiet", Word::Draft, "", { email: Em
 
 #[test]
 fn a_declared_tool_answering_a_never_field_or_lacking_descriptions_fails_and_a_closed_one_may_answer_it() -> Res<()> {
-    let doc = |operations| serde_json::from_str::<Value>(&Mount { key: "t", operations }.openapi());
+    let doc = |operations| {
+        serde_json::from_str::<Value>(
+            &Mount {
+                key: "t",
+                operations,
+                serve: BOOKS.serve,
+            }
+            .openapi(),
+        )
+    };
     assert_eq!(rules(&doc(&[LEAKS])?), ["never"]);
     assert_eq!(check(&doc(&[SHOWS])?), Vec::<String>::new());
     assert_eq!(rules(&doc(&[QUIET])?), ["description"]);

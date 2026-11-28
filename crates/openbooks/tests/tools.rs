@@ -1,5 +1,7 @@
 use openbooks::testing::TestHost;
-use openbooks::{BOOKS, Error, Mount, Never, Openbooks, Operation, Page, SignedIn, Tools, Via};
+use openbooks::{
+    Ask, BOOKS, Error, Filter, Json, Mount, Never, Openbooks, Operation, Page, Reply, SignedIn, Tools, Via, Work,
+};
 use openbooks_core::{Currency, Email, OrgId, Role, UserId, Word};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -14,7 +16,20 @@ const LEAKS: Operation = openbooks::read!("leak", Word::Read, "Answers secrets."
 const PACK: Mount = Mount {
     key: "pack",
     operations: &[PROPOSE, APPROVE, REPORT, LEAKS],
+    serve: serve_pack,
 };
+
+fn serve_pack(ask: Ask<'_>) -> Work<'_, Reply> {
+    Box::pin(async move {
+        let note = ask.argument("note").unwrap_or_default().to_owned();
+        let seen: i64 = sqlx::query_scalar("SELECT count(*) FROM ledger.member WHERE org_id = $1")
+            .bind(ask.org.get())
+            .fetch_one(&mut *ask.db)
+            .await
+            .map_err(|e| Error::Host(e.to_string()))?;
+        Ok(Reply::One(Json::Str(format!("{} {note} {seen}", ask.tool))))
+    })
+}
 
 fn person(user: i64, address: &str) -> Res<SignedIn> {
     Ok(SignedIn::person(UserId::new(user)?, Email::new(address)?))
@@ -175,5 +190,19 @@ async fn a_tool_answer_scrubs_free_text_and_a_switched_off_tool_is_not_called(po
         books.call_tool(org, "members", &[]).await,
         Err(Error::NoSuchTool(_))
     ));
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_packs_offered_tools_are_called_through_its_serve_and_a_write_leaves_one_audit_row(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool, Tools::new(&[BOOKS, PACK]).switch("report", true)?).await?;
+    let before = books.audit(org, Filter::default(), None).await?.items.len();
+    let proposed = books.call_tool(org, "propose", &[("note", "rent\u{7}\nnow")]).await?;
+    assert_eq!(proposed, "\"propose rent now 1\"");
+    let rows = books.audit(org, Filter::default(), None).await?.items;
+    let actions: Vec<&str> = rows[before..].iter().map(|r| r.action.as_str()).collect();
+    assert_eq!(actions, ["propose"]);
+    assert_eq!(books.call_tool(org, "report", &[]).await?, "\"report 1\"");
+    assert_eq!(books.audit(org, Filter::default(), None).await?.items.len(), before + 1);
     Ok(())
 }

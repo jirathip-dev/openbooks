@@ -10,8 +10,8 @@ use openbooks_db::members::{self, Member};
 use sqlx::{PgConnection, PgPool};
 
 use crate::openapi::{Json, map, text};
-use crate::tools::{ROWS, agent_page, listing};
-use crate::{Error, Hooks, Host, Mount, NoPack, Operation, Pack, Page, SignedIn, Tools, Work};
+use crate::tools::{answer, listing};
+use crate::{Ask, Error, Hooks, Host, Kind, Mount, NoPack, Operation, Pack, Page, Reply, Serve, SignedIn, Tools, Work};
 
 type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 
@@ -19,7 +19,21 @@ type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 pub const BOOKS: Mount = Mount {
     key: "books",
     operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER, AUDIT, TOOLS],
+    serve: serve_books,
 };
+
+fn serve_books(ask: Ask<'_>) -> Work<'_, Reply> {
+    Box::pin(async move {
+        if ask.tool != MEMBERS.name() {
+            return Err(Error::NoSuchTool(ask.tool.to_owned()));
+        }
+        let (limit, after) = (i64::from(ask.rows()), ask.argument("after").map(str::to_owned));
+        let rows = members::members(ask.db, ask.org, after.as_deref(), limit).await?;
+        Ok(Reply::Rows(
+            rows.iter().map(|m| (member(m), m.email.as_str().to_owned())).collect(),
+        ))
+    })
+}
 
 const PAGE: u16 = 100;
 
@@ -167,13 +181,11 @@ impl<H: Host + 'static> Openbooks<H> {
 
     /// One page of the company's members by email, from just after the cursor `after`.
     pub async fn members(&self, org: OrgId, after: Option<String>) -> Result<Page<Member>, Error> {
-        let items = self.member_rows(org, after, PAGE + 1).await?;
-        Ok(paged(items, |m| m.email.as_str().to_owned()))
-    }
-
-    async fn member_rows(&self, org: OrgId, after: Option<String>, limit: u16) -> Result<Vec<Member>, Error> {
         self.read(org, MEMBERS, move |db| {
-            Box::pin(async move { Ok(members::members(db, org, after.as_deref(), i64::from(limit)).await?) })
+            Box::pin(async move {
+                let items = members::members(db, org, after.as_deref(), i64::from(PAGE) + 1).await?;
+                Ok(paged(items, |m| m.email.as_str().to_owned()))
+            })
         })
         .await
     }
@@ -183,17 +195,26 @@ impl<H: Host + 'static> Openbooks<H> {
         Ok(listing(&self.offered(org).await?))
     }
 
-    /// Calls an offered tool with its arguments by name, answered in the agent view: 50 rows, a size cap, free text scrubbed.
+    /// Calls an offered tool with its arguments by name through its mount's serve, answered in the agent view: 50 rows, a size cap, free text scrubbed.
     pub async fn call_tool(&self, org: OrgId, tool: &str, arguments: &[(&str, &str)]) -> Result<String, Error> {
-        let argument = |name: &str| arguments.iter().find(|(k, _)| *k == name).map(|(_, v)| (*v).to_owned());
-        if !self.offered(org).await?.iter().any(|op| op.name() == tool) {
-            return Err(Error::NoSuchTool(tool.to_owned()));
+        let offered = self.offered(org).await?;
+        let op = offered.into_iter().find(|op| op.name() == tool);
+        let found = op.and_then(|op| Some((op, self.tools.serve(&op)?)));
+        let (op, serve) = found.ok_or_else(|| Error::NoSuchTool(tool.to_owned()))?;
+        let arguments: Vec<(String, String)> = arguments
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        let detail = arguments
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let work = served(serve, org, op, arguments);
+        match op.kind() {
+            Kind::Write => self.write(org, op, Record::Company, detail, None, work).await,
+            Kind::Read | Kind::ClosedRead | Kind::Closed => self.read(org, op, work).await,
         }
-        if tool == MEMBERS.name() {
-            let items = self.member_rows(org, argument("after"), ROWS + 1).await?;
-            return Ok(agent_page(items, member, |m| m.email.as_str().to_owned()));
-        }
-        Err(Error::NoSuchTool(tool.to_owned()))
     }
 
     async fn offered(&self, org: OrgId) -> Result<Vec<Operation>, Error> {
@@ -363,6 +384,25 @@ impl<H: Host + 'static> Openbooks<H> {
     }
 }
 
+fn served(
+    serve: Serve,
+    org: OrgId,
+    op: Operation,
+    arguments: Vec<(String, String)>,
+) -> impl for<'c> FnOnce(&'c mut PgConnection) -> Work<'c, String> + Send + 'static {
+    move |db| {
+        Box::pin(async move {
+            let ask = Ask {
+                db,
+                org,
+                tool: op.name(),
+                arguments: &arguments,
+            };
+            Ok(answer(serve(ask).await?))
+        })
+    }
+}
+
 fn member(m: &Member) -> Json {
     let json = map([("email", text(m.email.as_str())), ("role", text(m.role.as_str()))]);
     match m.user {
@@ -391,6 +431,16 @@ impl Answer for () {
 
     fn load(_: Option<&str>) -> Result<Self, Error> {
         Ok(())
+    }
+}
+
+impl Answer for String {
+    fn store(&self) -> Option<String> {
+        Some(self.clone())
+    }
+
+    fn load(stored: Option<&str>) -> Result<Self, Error> {
+        Ok(stored.unwrap_or_default().to_owned())
     }
 }
 

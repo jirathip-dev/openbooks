@@ -1,29 +1,70 @@
-use openbooks_core::{Role, Word};
+use openbooks_core::{OrgId, Role, Word};
+use sqlx::PgConnection;
 
 use crate::api::{Mount, Operation, Schema};
 use crate::openapi::{Json, map, object, render, text};
-use crate::{Error, SignedIn};
+use crate::{Error, SignedIn, Work};
 
-pub(crate) const ROWS: u16 = 50;
+const ROWS: u16 = 50;
 const SIZE: usize = 8 * 1024;
 const TEXT: usize = 200;
 
+/// Answers a mount's tool by its name, in the caller's transaction once their role is admitted.
+pub type Serve = for<'a> fn(Ask<'a>) -> Work<'a, Reply>;
+
+/// One tool call: the tool's name and arguments, the company and its database.
+pub struct Ask<'a> {
+    pub db: &'a mut PgConnection,
+    pub org: OrgId,
+    pub tool: &'static str,
+    pub arguments: &'a [(String, String)],
+}
+
+impl Ask<'_> {
+    pub fn argument(&self, name: &str) -> Option<&str> {
+        self.arguments.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    }
+
+    /// The rows a page may fetch: the agent view's 50, and one more to tell there are more.
+    pub fn rows(&self) -> u16 {
+        ROWS + 1
+    }
+}
+
+/// A tool's answer: one value, or rows each with the cursor that pages on after it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reply {
+    One(Json),
+    Rows(Vec<(Json, String)>),
+}
+
 /// The tools built at start-up from the mounts' declarations, each with its switch; company-wide reports start off.
 #[derive(Debug, Clone)]
-pub struct Tools(Vec<(Operation, bool)>);
+pub struct Tools(Vec<(Operation, Serve, bool)>);
 
 impl Tools {
     pub fn new(mounts: &[Mount]) -> Self {
-        let ops = mounts.iter().flat_map(|m| m.operations);
-        let tools = ops.filter(|op| op.is_tool() && !reaches_never(&op.output()));
-        Self(tools.map(|op| (*op, op.word() != Word::Reports)).collect())
+        let ops = mounts.iter().flat_map(|m| m.operations.iter().map(|op| (*op, m.serve)));
+        let tools = ops.filter(|(op, _)| op.is_tool() && !reaches_never(&op.output()));
+        Self(
+            tools
+                .map(|(op, serve)| (op, serve, op.word() != Word::Reports))
+                .collect(),
+        )
     }
 
     pub fn switch(mut self, name: &str, on: bool) -> Result<Self, Error> {
-        let tool = self.0.iter_mut().find(|(op, _)| op.name() == name);
-        let (_, switch) = tool.ok_or_else(|| Error::NoSuchTool(name.to_owned()))?;
+        let tool = self.0.iter_mut().find(|(op, _, _)| op.name() == name);
+        let (_, _, switch) = tool.ok_or_else(|| Error::NoSuchTool(name.to_owned()))?;
         *switch = on;
         Ok(self)
+    }
+
+    pub(crate) fn serve(&self, op: &Operation) -> Option<Serve> {
+        self.0
+            .iter()
+            .find(|(o, _, on)| *on && o.name() == op.name())
+            .map(|(_, serve, _)| *serve)
     }
 
     /// The tools switched on whose word the role has and the host's narrowing keeps.
@@ -31,8 +72,8 @@ impl Tools {
         let offered = |op: &Operation| role.allows(op.word()) && signed.keeps(op.word());
         self.0
             .iter()
-            .filter(|(op, on)| *on && offered(op))
-            .map(|(op, _)| *op)
+            .filter(|(op, _, on)| *on && offered(op))
+            .map(|(op, _, _)| *op)
             .collect()
     }
 }
@@ -57,20 +98,28 @@ pub(crate) fn listing(tools: &[Operation]) -> String {
     render(&map([("tools", Json::List(tools.iter().map(tool).collect()))]))
 }
 
-pub(crate) fn agent_page<T>(mut items: Vec<T>, json: impl Fn(&T) -> Json, cursor: impl Fn(&T) -> String) -> String {
+pub(crate) fn answer(reply: Reply) -> String {
+    match reply {
+        Reply::One(json) => render(&scrub(json)),
+        Reply::Rows(rows) => agent_page(rows),
+    }
+}
+
+fn agent_page(mut items: Vec<(Json, String)>) -> String {
     let more = items.len() > usize::from(ROWS);
     items.truncate(usize::from(ROWS));
     let mut size = 0;
     let fits = items.iter().take_while(|item| {
-        size += render(&scrub(json(item))).len();
+        size += render(&scrub(item.0.clone())).len();
         size <= SIZE
     });
     let kept = fits.count().max(1).min(items.len());
     let more = more || kept < items.len();
     items.truncate(kept);
-    let mut page = map([("items", Json::List(items.iter().map(|i| scrub(json(i))).collect()))]);
-    if let Some(last) = items.last().filter(|_| more) {
-        page = page.with("next", text(&cursor(last)));
+    let next = items.last().filter(|_| more).map(|(_, cursor)| text(cursor));
+    let mut page = map([("items", Json::List(items.into_iter().map(|(i, _)| scrub(i)).collect()))]);
+    if let Some(next) = next {
+        page = page.with("next", next);
     }
     render(&page)
 }
