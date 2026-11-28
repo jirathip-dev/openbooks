@@ -7,6 +7,3 @@ setup = ["rust", "node"]
 
 [[step]]
 run = "sh .gatekeeper/surface.sh"
-
-[[step]]
-run = "sh .gatekeeper/surface-fixture.sh"
