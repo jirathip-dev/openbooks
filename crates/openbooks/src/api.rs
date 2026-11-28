@@ -12,7 +12,7 @@ pub enum Kind {
 /// One route, made only by `read!`, `write!` or `closed!`, with the word it needs and the shapes it takes and answers.
 #[doc = "```compile_fail,E0451"]
 #[doc = "use openbooks::{Kind, Operation, Schema};"]
-#[doc = "let undeclared = Operation { kind: Kind::Read, name: \"x\", word: openbooks_core::Word::Read, about: \"x\", input: Vec::new, output: || Schema::Nothing };"]
+#[doc = "let undeclared = Operation { kind: Kind::Read, name: \"x\", word: openbooks_core::Word::Read, about: \"x\", input: Vec::new, output: || Schema::Nothing, creates: false };"]
 #[doc = "```"]
 #[derive(Debug, Clone, Copy)]
 pub struct Operation {
@@ -22,6 +22,7 @@ pub struct Operation {
     about: &'static str,
     input: fn() -> Vec<Field>,
     output: fn() -> Schema,
+    creates: bool,
 }
 
 impl Operation {
@@ -41,7 +42,18 @@ impl Operation {
             about,
             input,
             output,
+            creates: false,
         }
+    }
+
+    /// Marks a write that makes something: it takes an `Idempotency-Key`, and the same key and body answer once.
+    #[must_use]
+    pub const fn creates(self) -> Self {
+        Self { creates: true, ..self }
+    }
+
+    pub fn is_create(&self) -> bool {
+        self.creates
     }
 
     pub fn kind(&self) -> Kind {

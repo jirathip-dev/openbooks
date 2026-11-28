@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use openbooks::testing::TestHost;
 use openbooks::{BOOKS, Error, Member, Openbooks, Operation, Scope, SignedIn, Via};
-use openbooks_core::{Currency, Email, OrgId, ProjectId, Role, UserId, Word};
+use openbooks_core::{Currency, Email, OrgId, Origin, ProjectId, Role, UserId, Word};
 use sqlx::{PgPool, query_scalar};
 
 type Res<T> = Result<T, Box<dyn std::error::Error>>;
@@ -19,7 +19,7 @@ async fn books(pool: PgPool) -> Res<(Openbooks<TestHost>, OrgId)> {
     openbooks_db::migrate(&pool).await?;
     let books = Openbooks::new(TestHost::new(pool)).build();
     books.host().sign_in(person(1, "ann@example.com")?);
-    let org = books.create_company("Acme", Currency::new("XTS", 2)?).await?;
+    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
     Ok((books, org))
 }
 
@@ -40,14 +40,16 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
     let books = Openbooks::new(TestHost::new(pool.clone())).build();
     books.host().sign_in(person(1, "ann@example.com")?);
     books.host().roll_back(true);
-    books.create_company("Acme", Currency::new("XTS", 2)?).await?;
-    for table in ["org", "member", "audit"] {
+    books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
+    for table in ["org", "member", "audit", "event"] {
         assert_eq!(rows(&pool, table).await?, 0, "{table}");
     }
     books.host().roll_back(false);
-    let org = books.create_company("Acme", Currency::new("XTS", 2)?).await?;
+    let org = books.create_company("Acme", Currency::new("XTS", 2)?, None).await?;
     books.host().roll_back(true);
-    books.add_member(org, email("bob@example.com")?, Role::Staff).await?;
+    books
+        .add_member(org, email("bob@example.com")?, Role::Staff, None)
+        .await?;
     assert_eq!(
         (rows(&pool, "member").await?, audits(&pool).await?),
         (1, vec!["company.create".to_owned()])
@@ -63,11 +65,11 @@ async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_wo
     for (n, role) in (2..).zip(Role::ALL) {
         let address = format!("member{n}@example.com");
         books.host().sign_in(person(1, "ann@example.com")?);
-        books.add_member(org, email(&address)?, role).await?;
+        books.add_member(org, email(&address)?, role, None).await?;
         books.host().sign_in(person(n, &address)?);
         let read = books.members(org, None).await.map(drop);
         let own = books
-            .add_member(org, email(&format!("new{n}@example.com"))?, Role::Viewer)
+            .add_member(org, email(&format!("new{n}@example.com"))?, Role::Viewer, None)
             .await;
         for (outcome, word) in [(read, Word::Read), (own, Word::Own)] {
             match outcome {
@@ -97,17 +99,23 @@ async fn a_host_narrows_an_owner_as_an_assistant_or_to_projects_and_never_widens
     ] {
         books.host().sign_in(narrowed);
         assert_eq!(books.members(org, None).await?.items.len(), 1);
-        let added = books.add_member(org, email("bob@example.com")?, Role::Staff).await;
+        let added = books
+            .add_member(org, email("bob@example.com")?, Role::Staff, None)
+            .await;
         assert!(matches!(added, Err(Error::Forbidden { word: Word::Own })), "{added:?}");
     }
     assert!(projects.covers(ProjectId::new(7)?) && !projects.covers(ProjectId::new(8)?));
     books.host().sign_in(ann);
-    books.add_member(org, email("vic@example.com")?, Role::Viewer).await?;
+    books
+        .add_member(org, email("vic@example.com")?, Role::Viewer, None)
+        .await?;
     books.host().sign_in(SignedIn {
-        via: Via::Host,
+        via: Via::Host(Origin::new("payroll-sync")?),
         ..person(3, "vic@example.com")?
     });
-    let added = books.add_member(org, email("eve@example.com")?, Role::Owner).await;
+    let added = books
+        .add_member(org, email("eve@example.com")?, Role::Owner, None)
+        .await;
     assert!(matches!(added, Err(Error::Forbidden { word: Word::Own })), "{added:?}");
     Ok(())
 }
@@ -132,7 +140,9 @@ async fn a_signed_in_person_who_is_no_member_is_refused_by_name(pool: PgPool) ->
 #[sqlx::test(migrations = false)]
 async fn a_member_added_by_email_is_tied_to_their_user_id_at_first_sign_in(pool: PgPool) -> Res<()> {
     let (books, org) = books(pool.clone()).await?;
-    books.add_member(org, email("Bob@Example.com")?, Role::Staff).await?;
+    books
+        .add_member(org, email("Bob@Example.com")?, Role::Staff, None)
+        .await?;
     let bob = |user| {
         Res::Ok(Member {
             email: email("bob@example.com")?,
@@ -165,7 +175,7 @@ async fn the_last_owner_cannot_be_removed_or_lowered(pool: PgPool) -> Res<()> {
         books.remove_member(org, ann.clone()).await,
         Err(Error::LastOwner)
     ));
-    books.add_member(org, bob.clone(), Role::Owner).await?;
+    books.add_member(org, bob.clone(), Role::Owner, None).await?;
     books.change_role(org, ann.clone(), Role::Accountant).await?;
     books.host().sign_in(person(2, "bob@example.com")?);
     assert!(matches!(
@@ -194,7 +204,7 @@ async fn members_come_a_page_at_a_time_and_the_cursor_reaches_the_last(pool: PgP
     let (books, org) = books(pool).await?;
     for n in 0..100 {
         books
-            .add_member(org, email(&format!("m{n:03}@example.com"))?, Role::Viewer)
+            .add_member(org, email(&format!("m{n:03}@example.com"))?, Role::Viewer, None)
             .await?;
     }
     let first = books.members(org, None).await?;

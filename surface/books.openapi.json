@@ -111,6 +111,15 @@
               "format": "int64",
               "minimum": 1
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "The caller's key for this create: the same key and body get the first answer, another body a 409.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -148,6 +157,9 @@
         "responses": {
           "204": {
             "description": "Done, with nothing to answer."
+          },
+          "409": {
+            "description": "The key was sent with another body."
           }
         }
       }
