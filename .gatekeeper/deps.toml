@@ -2,7 +2,8 @@ growth = 10
 
 [cargo]
 blocks = "the scheme and style gates the web theme test runs over web/theme/"
-serde_json = "reads the web theme's JSON files in that test"
+serde_json = "reads JSON in tests: the web theme's files and the sqlx query cache"
+sqlx = "the Postgres driver of openbooks-db: migrations, the checked query cache and #[sqlx::test] databases"
 
 [npm]
 typescript = "the type checker behind tsc --noEmit on web/ and packs/th/web/"
