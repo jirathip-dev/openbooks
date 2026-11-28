@@ -5,6 +5,8 @@ use std::process::Command;
 
 type Res<T> = Result<T, Box<dyn Error>>;
 
+const TAG: &str = "git init -q && git add -A && git -c user.name=f -c user.email=f@f commit -qm v && git tag v0.1.0";
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -35,11 +37,18 @@ fn arch_gate(name: &str, fixture: Option<&Path>) -> Res<(bool, String)> {
         }
         fs::copy(root().join(config), dest)?;
     }
+    overlay(&root().join(".gatekeeper"), &tree.join(".gatekeeper"))?;
+    let before = fixture.map(|f| f.with_file_name("before")).filter(|b| b.exists());
+    if let Some(before) = &before {
+        overlay(before, &tree)?;
+        Command::new("sh").args(["-c", TAG]).current_dir(&tree).status()?;
+    }
     if let Some(fixture) = fixture {
         overlay(fixture, &tree)?;
     }
+    let gate = if before.is_some() { "local/surface" } else { "core/arch" };
     let out = Command::new(tree.join(".gatekeeper/run"))
-        .args(["check", "--gate", "core/arch"])
+        .args(["check", "--gate", gate])
         .current_dir(&tree)
         .output()?;
     let log = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
@@ -54,7 +63,7 @@ fn the_arch_config_passes_alone_and_fails_each_fixture_with_its_rule() -> Res<()
         .map(|e| e.map(|e| e.path()))
         .collect::<Result<Vec<_>, _>>()?;
     cases.sort();
-    assert_eq!(cases.len(), 16);
+    assert_eq!(cases.len(), 17);
     for case in cases {
         let name = case.file_name().and_then(|n| n.to_str()).unwrap_or_default();
         let expect = fs::read_to_string(case.join("expect"))?;

@@ -1,6 +1,7 @@
 [package]
 name = "openbooks-th"
 version.workspace = true
+description = "openbooks: the Thai country pack"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

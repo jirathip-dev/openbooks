@@ -1,0 +1,9 @@
+about = "the public surface (each crate's public items, each npm package's declarations, each document under surface/) keeps every line of the last v* release, or the one version moves to the next breaking one"
+fix = "put the removed or changed item back, or raise the workspace version and every npm package to the version the failure names"
+budget_secs = 180
+cache = false
+platform = "linux"
+setup = ["rust", "node"]
+
+[[step]]
+run = "sh .gatekeeper/surface.sh"
