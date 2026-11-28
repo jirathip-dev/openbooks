@@ -1,0 +1,261 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "openbooks books",
+    "version": "1",
+    "description": "The operations mounted under books."
+  },
+  "paths": {
+    "/books/{org}/members": {
+      "get": {
+        "operationId": "members",
+        "description": "Lists the company's members by email, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "email",
+                          "role"
+                        ],
+                        "properties": {
+                          "email": {
+                            "type": "string",
+                            "format": "email",
+                            "description": "The address the member was added by."
+                          },
+                          "user": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 1,
+                            "description": "The user id they signed in with, once they have."
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "accountant",
+                              "staff",
+                              "viewer"
+                            ],
+                            "description": "Their role in the company."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/member.add": {
+      "post": {
+        "operationId": "member.add",
+        "description": "Adds a person by email with a role.",
+        "x-openbooks-word": "own",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "The address they will sign in with."
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "accountant",
+                      "staff",
+                      "viewer"
+                    ],
+                    "description": "The role they get."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/member.role": {
+      "post": {
+        "operationId": "member.role",
+        "description": "Gives a member another role; the last owner stays one.",
+        "x-openbooks-word": "own",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "The member's address."
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "accountant",
+                      "staff",
+                      "viewer"
+                    ],
+                    "description": "Their new role."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/member.remove": {
+      "post": {
+        "operationId": "member.remove",
+        "description": "Takes a member off the list; the last owner stays.",
+        "x-openbooks-word": "own",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "The member's address."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    }
+  }
+}

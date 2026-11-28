@@ -13,3 +13,6 @@ workspace = true
 openbooks-core = { version = "0.1.0", path = "../openbooks-core" }
 openbooks-db = { version = "0.1.0", path = "../openbooks-db" }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "macros", "migrate"] }
+
+[dev-dependencies]
+serde_json = "1"
