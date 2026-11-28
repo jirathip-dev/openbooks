@@ -1,5 +1,25 @@
-{"label":"openbooks light","color-scheme":"light","tokens":{
-"--bg":"#f6f6f6","--card":"#ffffff","--edge":"#d0d0d0","--line":"#e4e4e4","--scrim":"#0000004d",
-"--fg":"#1c1c1c","--mute":"#5e5e5e","--l":"#3d3d3d","--link":"#3d3d3d",
-"--g":"#547850","--a":"#927236","--r":"#a75953","--p":"#74678e","--c":"#3c797d",
-"--fk-l":"#3d3d3d","--fk-p":"#64597c","--fk-c":"#31666a","--fk-g":"#456642","--fk-a":"#775d2c"}}
+{
+  "label": "openbooks light",
+  "color-scheme": "light",
+  "tokens": {
+    "--bg": "#f4efe4",
+    "--card": "#fffcf5",
+    "--edge": "#d9cfbc",
+    "--line": "#e9e1d1",
+    "--scrim": "#2a20144d",
+    "--fg": "#1f1b16",
+    "--mute": "#615746",
+    "--l": "#24497a",
+    "--link": "#24497a",
+    "--g": "#4d7343",
+    "--a": "#8f6a1f",
+    "--r": "#a8473b",
+    "--p": "#6c5a8e",
+    "--c": "#2f6f74",
+    "--fk-l": "#24497a",
+    "--fk-p": "#5d4d7d",
+    "--fk-c": "#2a6267",
+    "--fk-g": "#3f6237",
+    "--fk-a": "#74561a"
+  }
+}

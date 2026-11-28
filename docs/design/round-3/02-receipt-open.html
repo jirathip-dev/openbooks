@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>openbooks · New receipt</title>
+<link rel="stylesheet" href="openbooks.css">
+<style>
+.settle{width:100%}
+.settle td{vertical-align:middle;padding:var(--s3) var(--s2)}
+.settle td:first-child{padding-left:var(--s4)}
+.settle td:last-child{padding-right:var(--s4);width:24px}
+.settle th:first-child{padding-left:var(--s4)}
+.settle .no{font:600 var(--fs) var(--sans);font-variant-numeric:tabular-nums lining-nums}
+.settle tr.row{cursor:pointer}
+.settle tr.row[aria-expanded=true] td{background:var(--bg);border-bottom:0}
+.settle tr.row[aria-expanded=true] td:first-child{box-shadow:inset 3px 0 0 var(--l)}
+.settle tr.row[aria-expanded=true] .ico{transform:rotate(90deg)}
+.settle tr.ed td{background:var(--bg);padding:0 var(--s4) var(--s4);box-shadow:inset 3px 0 0 var(--l)}
+.ed{display:none}
+body.open .ed{display:table-row}
+.edit{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3) var(--s4);padding-top:var(--s2)}
+.seg{display:inline-flex;border:1px solid var(--edge);border-radius:var(--radius);overflow:hidden}
+.seg span{padding:0 var(--s3);min-height:34px;display:flex;align-items:center;background:var(--card)}
+.seg span[aria-pressed]{background:var(--l);color:var(--bg);font-weight:600}
+.adj{grid-column:1/-1}
+.adj .line{display:grid;grid-template-columns:110px 1fr 120px 28px;gap:var(--s2);align-items:center;margin-top:4px}
+.reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s2)}
+.reasons span{padding:2px var(--s2);border:1px dashed var(--edge);color:var(--mute);font-size:var(--fs-meta)}
+.left{grid-column:1/-1;display:flex;align-items:center;gap:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+.left .sp{flex:1}
+.sum{display:flex;flex-wrap:wrap;gap:4px var(--s4);justify-content:flex-end;padding:var(--s3) var(--s4);font-size:var(--fs);border-top:1px solid var(--edge)}
+.sum b{font-family:var(--sans);font-variant-numeric:tabular-nums lining-nums}
+.phone-row{display:none}
+@media (max-width:599px){
+  .settle thead,.settle td.wd{display:none}
+  .settle td{padding:var(--s3) var(--s2)}
+  .settle td:first-child{padding-left:var(--s3)}
+  .edit{grid-template-columns:1fr}
+  .adj .line{grid-template-columns:80px 1fr 90px 24px}
+  .adj .line .acc{display:none}
+  .adj .line{grid-template-columns:1fr 100px 24px}
+  .sum{justify-content:flex-start;padding:var(--s3)}
+  .phone-row{display:block}
+}
+</style>
+</head>
+<body class="open">
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-today" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11"/><path d="M2 6h12M5 1v3M11 1v3"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 16 16"><path d="M4 1h6l3 3v11H4z"/><path d="M10 1v3h3M6 8h5M6 11h5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3 3-5 6-5s6 2 6 5"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 16 16"><path d="M2 6l6-4 6 4M3 6v6M6 6v6M10 6v6M13 6v6M2 14h12"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 16 16"><path d="M2 5l6-3 6 3v7l-6 3-6-3zM2 5l6 3 6-3M8 8v7"/></symbol>
+  <symbol id="i-asset" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9"/><path d="M5 4V2h6v2"/></symbol>
+  <symbol id="i-rep" viewBox="0 0 16 16"><path d="M3 14V8M7 14V4M11 14V9M2 14h12"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+</svg>
+<div class="app">
+  <nav class="rail">
+    <div class="brand"><b>Nolla Works Co., Ltd.</b><span class="meta">Head office · THB · FY 2026</span></div>
+    <a href="#"><svg class="ico"><use href="#i-today"/></svg>Today<span class="ct">2</span></a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-user"/></svg>Contacts</a><a href="#"><svg class="ico"><use href="#i-stock"/></svg>Inventory</a><a href="#"><svg class="ico"><use href="#i-asset"/></svg>Assets</a><a href="#"><svg class="ico"><use href="#i-rep"/></svg>Reports</a>
+    <a href="#" class="gear"><svg class="ico"><use href="#i-gear"/></svg>Setup</a>
+  </nav>
+  <main>
+
+    <div class="head">
+      <div><div class="crumb">Documents › Receipts</div><h1>New receipt</h1></div>
+      <span class="st">Draft</span>
+    </div>
+    <div class="card form">
+      <div class="top">
+        <div class="field"><label>Customer</label><div class="pick">Granite Steel Works <span class="meta">Head office</span></div></div>
+        <div class="field"><label>Amount received</label><div class="big-in"><span class="cur">THB</span><span class="num">103,970.00</span></div></div>
+      </div>
+      <div class="phone-row meta" style="padding:var(--s2) var(--s3);border-top:1px solid var(--line)">Settles, oldest first</div>
+      <table class="settle">
+        <thead><tr><th>Settles, oldest first</th><th class="num">Open</th><th class="num">Pays</th><th class="num">Left</th><th></th></tr></thead>
+        <tbody>
+          <tr class="row" aria-expanded="false"><td><span class="no">AR2610-0031</span><br><span class="meta">1 Oct · due 31 Oct</span></td><td class="num wd">64,200.00</td><td class="num"><b>64,200.00</b><br><span class="meta">withheld 1,800.00</span></td><td class="num wd">0.00</td><td><svg class="ico"><use href="#i-chev"/></svg></td></tr>
+          <tr class="row" aria-expanded="true"><td><span class="no">AR2611-0004</span><br><span class="meta">13 Nov · due 13 Dec</span></td><td class="num wd">53,500.00</td><td class="num"><b>42,800.00</b><br><span class="meta">withheld 1,200.00 · fee 30.00</span></td><td class="num wd">10,700.00</td><td><svg class="ico"><use href="#i-chev"/></svg></td></tr>
+          <tr class="ed"><td colspan="5">
+            <div class="edit">
+              <div class="field"><label>Pay on this invoice</label><div style="display:flex;gap:var(--s2)"><span class="seg"><span>In full</span><span aria-pressed="true">Part</span></span><div class="input" style="flex:1"><span class="num">42,800.00</span></div></div></div>
+              <div class="field"><label>Tax withheld on this payment</label><div style="display:flex;gap:var(--s2)"><div class="input" style="width:130px">3% services ▾</div><div class="input" style="flex:1"><span class="num">1,200.00</span></div></div></div>
+              <div class="adj field"><label>Adjustments</label>
+                <div class="line"><div class="input">Fee ▾</div><div class="input acc">5310 Bank charges</div><div class="input"><span class="num">30.00</span></div><svg class="ico mute" style="margin:auto"><use href="#i-x"/></svg></div>
+                <div class="reasons"><span>+ Penalty</span><span>+ Discount</span><span>+ Retention</span><span>+ Fee</span><span>+ Rounding</span><span>+ Other</span></div>
+              </div>
+              <div class="left"><span>Left open</span><b class="num">10,700.00</b><span class="sp"></span><span class="btn">Close in full</span><span class="btn main">Done</span></div>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+      <div class="sum"><span>Received <b>103,970.00</b></span><span>+ withheld <b>3,000.00</b></span><span>+ fee <b>30.00</b></span><span>= settles <b>107,000.00</b></span></div>
+      <div class="defaults">
+        <span>Book <b>RV 02 Receipts</b></span><span>Number <b>on approval</b></span><span>Date <b>26 Nov 2026</b></span><span>Into <b>Main current</b></span><span><b>THB</b></span>
+        <a class="link">Change</a>
+      </div>
+      <details class="reveal"><summary>Show entry</summary></details>
+    </div>
+
+  </main>
+</div>
+<div class="actionbar"><span class="sp"></span><span class="btn">Save draft</span><span class="btn main">Approve</span></div>
+<nav class="tabbar"><a href="#"><svg class="ico"><use href="#i-today"/></svg>Today</a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-plus"/></svg>New</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-more"/></svg>More</a></nav>
+</body>
+</html>
