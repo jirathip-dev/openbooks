@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use openbooks::testing::TestHost;
-use openbooks::{Error, Member, Op, Openbooks, Scope, SignedIn, Via};
+use openbooks::{BOOKS, Error, Member, Openbooks, Operation, Scope, SignedIn, Via};
 use openbooks_core::{Currency, Email, OrgId, ProjectId, Role, UserId, Word};
 use sqlx::{PgPool, query_scalar};
 
@@ -58,14 +58,14 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
 #[sqlx::test(migrations = false)]
 async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_words_allow(pool: PgPool) -> Res<()> {
     let words = [Word::Read, Word::Own, Word::Own, Word::Own];
-    assert_eq!(Op::ALL.map(Op::word), words);
+    assert_eq!(BOOKS.operations.iter().map(Operation::word).collect::<Vec<_>>(), words);
     let (books, org) = books(pool).await?;
     for (n, role) in (2..).zip(Role::ALL) {
         let address = format!("member{n}@example.com");
         books.host().sign_in(person(1, "ann@example.com")?);
         books.add_member(org, email(&address)?, role).await?;
         books.host().sign_in(person(n, &address)?);
-        let read = books.members(org).await.map(drop);
+        let read = books.members(org, None).await.map(drop);
         let own = books
             .add_member(org, email(&format!("new{n}@example.com"))?, Role::Viewer)
             .await;
@@ -96,7 +96,7 @@ async fn a_host_narrows_an_owner_as_an_assistant_or_to_projects_and_never_widens
         },
     ] {
         books.host().sign_in(narrowed);
-        assert_eq!(books.members(org).await?.len(), 1);
+        assert_eq!(books.members(org, None).await?.items.len(), 1);
         let added = books.add_member(org, email("bob@example.com")?, Role::Staff).await;
         assert!(matches!(added, Err(Error::Forbidden { word: Word::Own })), "{added:?}");
     }
@@ -116,16 +116,16 @@ async fn a_host_narrows_an_owner_as_an_assistant_or_to_projects_and_never_widens
 async fn a_signed_in_person_who_is_no_member_is_refused_by_name(pool: PgPool) -> Res<()> {
     let (books, org) = books(pool).await?;
     books.host().sign_in(person(9, "mallory@example.com")?);
-    let refused = books.members(org).await.map(drop).map_err(|e| e.to_string());
+    let refused = books.members(org, None).await.map(drop).map_err(|e| e.to_string());
     assert_eq!(
         refused,
         Err("mallory@example.com is not a member of this company".to_owned())
     );
     books.host().name(UserId::new(9)?, "Mallory Stone");
-    let refused = books.members(org).await.map(drop).map_err(|e| e.to_string());
+    let refused = books.members(org, None).await.map(drop).map_err(|e| e.to_string());
     assert_eq!(refused, Err("Mallory Stone is not a member of this company".to_owned()));
     books.host().sign_out();
-    assert!(matches!(books.members(org).await, Err(Error::SignedOut)));
+    assert!(matches!(books.members(org, None).await, Err(Error::SignedOut)));
     Ok(())
 }
 
@@ -140,10 +140,16 @@ async fn a_member_added_by_email_is_tied_to_their_user_id_at_first_sign_in(pool:
             role: Role::Staff,
         })
     };
-    assert!(books.members(org).await?.contains(&bob(None)?));
+    assert!(books.members(org, None).await?.items.contains(&bob(None)?));
     books.host().sign_in(person(2, "bob@example.com")?);
-    assert!(books.members(org).await?.contains(&bob(Some(UserId::new(2)?))?));
-    books.members(org).await?;
+    assert!(
+        books
+            .members(org, None)
+            .await?
+            .items
+            .contains(&bob(Some(UserId::new(2)?))?)
+    );
+    books.members(org, None).await?;
     let actions = ["company.create", "member.add", "member.join"];
     assert_eq!(audits(&pool).await?, actions.map(str::to_owned));
     Ok(())
@@ -167,7 +173,7 @@ async fn the_last_owner_cannot_be_removed_or_lowered(pool: PgPool) -> Res<()> {
         Err(Error::LastOwner)
     ));
     books.remove_member(org, ann.clone()).await?;
-    let left = books.members(org).await?;
+    let left = books.members(org, None).await?.items;
     assert_eq!(
         left.iter().map(|m| (&m.email, m.role)).collect::<Vec<_>>(),
         [(&bob, Role::Owner)]
@@ -180,5 +186,25 @@ async fn the_last_owner_cannot_be_removed_or_lowered(pool: PgPool) -> Res<()> {
         "member.remove",
     ];
     assert_eq!(audits(&pool).await?, actions.map(str::to_owned));
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn members_come_a_page_at_a_time_and_the_cursor_reaches_the_last(pool: PgPool) -> Res<()> {
+    let (books, org) = books(pool).await?;
+    for n in 0..100 {
+        books
+            .add_member(org, email(&format!("m{n:03}@example.com"))?, Role::Viewer)
+            .await?;
+    }
+    let first = books.members(org, None).await?;
+    let last = first.items.last().map(|m| m.email.as_str().to_owned());
+    assert_eq!(
+        (first.items.len(), &first.next, &last),
+        (100, &last, &Some("m098@example.com".to_owned()))
+    );
+    let second = books.members(org, first.next).await?;
+    let emails: Vec<&str> = second.items.iter().map(|m| m.email.as_str()).collect();
+    assert_eq!((emails, second.next), (vec!["m099@example.com"], None));
     Ok(())
 }

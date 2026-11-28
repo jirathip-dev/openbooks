@@ -9,6 +9,6 @@
 - don't change web/theme/ so it fails Blocks' scheme or style gate (enforced by: test crates/openbooks-server/tests/theme.rs)
 - don't change a ban or layer in .drover/arch.toml so its fixture in .drover/fixtures/ passes the arch gate (enforced by: test crates/openbooks-server/tests/arch.rs)
 - don't post in a test without checking each sub-ledger it touches against its control account (enforced by: none)
-- don't declare a route without the permission word it needs (enforced by: none)
+- don't declare a route without the permission word it needs (enforced by: type `openbooks::Operation`, test crates/openbooks/tests/api.rs)
 - don't write without leaving exactly one audit row (enforced by: none)
 - don't stress the shared host from a lane: no `yes`, `stress` or busy loops, no N parallel copies (enforced by: hook HOST_STRESS)

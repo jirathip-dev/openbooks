@@ -5,36 +5,33 @@ use openbooks_core::{Currency, Email, OrgId, Role, Word};
 use openbooks_db::members::{self, Audit, Member};
 use sqlx::PgConnection;
 
-use crate::{Error, Host, SignedIn, Work};
+use crate::{Error, Host, Kind, Mount, Operation, Page, SignedIn, Work};
 
-/// Every operation on a company, each declared with the one word it needs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Op {
-    Members,
-    AddMember,
-    ChangeRole,
-    RemoveMember,
-}
+/// The member operations, mounted under `books`.
+pub const BOOKS: Mount = Mount {
+    key: "books",
+    operations: &[MEMBERS, ADD_MEMBER, CHANGE_ROLE, REMOVE_MEMBER],
+};
 
-impl Op {
-    pub const ALL: [Self; 4] = [Self::Members, Self::AddMember, Self::ChangeRole, Self::RemoveMember];
+const PAGE: u16 = 100;
 
-    pub fn word(self) -> Word {
-        match self {
-            Self::Members => Word::Read,
-            Self::AddMember | Self::ChangeRole | Self::RemoveMember => Word::Own,
-        }
-    }
+const MEMBERS: Operation = crate::read!("members", Word::Read, "Lists the company's members by email, a page at a time.", {
+    after: Option<String> = "The cursor from the last page's next; absent for the first page.",
+} -> Page<Member>);
 
-    fn action(self) -> Option<&'static str> {
-        match self {
-            Self::Members => None,
-            Self::AddMember => Some("member.add"),
-            Self::ChangeRole => Some("member.role"),
-            Self::RemoveMember => Some("member.remove"),
-        }
-    }
-}
+const ADD_MEMBER: Operation = crate::closed!("member.add", Word::Own, "Adds a person by email with a role.", {
+    email: Email = "The address they will sign in with.",
+    role: Role = "The role they get.",
+} -> ());
+
+const CHANGE_ROLE: Operation = crate::closed!("member.role", Word::Own, "Gives a member another role; the last owner stays one.", {
+    email: Email = "The member's address.",
+    role: Role = "Their new role.",
+} -> ());
+
+const REMOVE_MEMBER: Operation = crate::closed!("member.remove", Word::Own, "Takes a member off the list; the last owner stays.", {
+    email: Email = "The member's address.",
+} -> ());
 
 /// The books, embedded in a host.
 pub struct Openbooks<H> {
@@ -84,16 +81,25 @@ impl<H: Host + 'static> Openbooks<H> {
             .await
     }
 
-    pub async fn members(&self, org: OrgId) -> Result<Vec<Member>, Error> {
-        self.on(org, Op::Members, String::new(), move |db| {
-            Box::pin(async move { Ok(members::members(db, org).await?) })
+    /// One page of the company's members by email, from just after the cursor `after`.
+    pub async fn members(&self, org: OrgId, after: Option<String>) -> Result<Page<Member>, Error> {
+        self.on(org, MEMBERS, String::new(), move |db| {
+            Box::pin(async move {
+                let mut items = members::members(db, org, after.as_deref(), i64::from(PAGE) + 1).await?;
+                let more = items.len() > usize::from(PAGE);
+                items.truncate(usize::from(PAGE));
+                let next = more
+                    .then(|| items.last().map(|m| m.email.as_str().to_owned()))
+                    .flatten();
+                Ok(Page { items, next })
+            })
         })
         .await
     }
 
     pub async fn add_member(&self, org: OrgId, email: Email, role: Role) -> Result<(), Error> {
         let detail = format!("{} as {}", email.as_str(), role.as_str());
-        self.on(org, Op::AddMember, detail, move |db| {
+        self.on(org, ADD_MEMBER, detail, move |db| {
             Box::pin(async move {
                 members::lock_org(db, org).await?;
                 if members::add(db, org, &email, role).await? {
@@ -108,7 +114,7 @@ impl<H: Host + 'static> Openbooks<H> {
 
     pub async fn change_role(&self, org: OrgId, email: Email, role: Role) -> Result<(), Error> {
         let detail = format!("{} to {}", email.as_str(), role.as_str());
-        self.on(org, Op::ChangeRole, detail, move |db| {
+        self.on(org, CHANGE_ROLE, detail, move |db| {
             Box::pin(async move {
                 keep_an_owner(db, org, &email, role != Role::Owner).await?;
                 Ok(members::set_role(db, org, &email, role).await?)
@@ -119,7 +125,7 @@ impl<H: Host + 'static> Openbooks<H> {
 
     pub async fn remove_member(&self, org: OrgId, email: Email) -> Result<(), Error> {
         let detail = email.as_str().to_owned();
-        self.on(org, Op::RemoveMember, detail, move |db| {
+        self.on(org, REMOVE_MEMBER, detail, move |db| {
             Box::pin(async move {
                 keep_an_owner(db, org, &email, true).await?;
                 Ok(members::remove(db, org, &email).await?)
@@ -128,7 +134,7 @@ impl<H: Host + 'static> Openbooks<H> {
         .await
     }
 
-    async fn on<T, F>(&self, org: OrgId, op: Op, detail: String, work: F) -> Result<T, Error>
+    async fn on<T, F>(&self, org: OrgId, op: Operation, detail: String, work: F) -> Result<T, Error>
     where
         T: Send + 'static,
         F: for<'c> FnOnce(&'c mut PgConnection) -> Work<'c, T> + Send + 'static,
@@ -143,8 +149,8 @@ impl<H: Host + 'static> Openbooks<H> {
                         return Err(Error::Forbidden { word: op.word() });
                     }
                     let out = work(&mut *db).await?;
-                    if let Some(action) = op.action() {
-                        audit(&*host, db, org, &signed, action, &detail).await?;
+                    if op.kind() != Kind::Read {
+                        audit(&*host, db, org, &signed, op.name(), &detail).await?;
                     }
                     Ok(out)
                 })

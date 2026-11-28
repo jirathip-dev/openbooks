@@ -108,9 +108,23 @@ pub async fn add(db: &mut PgConnection, org: OrgId, email: &Email, role: Role) -
     Ok(added.rows_affected() == 1)
 }
 
-pub async fn members(db: &mut PgConnection, org: OrgId) -> Result<Vec<Member>, sqlx::Error> {
-    let sql = format!("SELECT {COLUMNS} FROM ledger.member WHERE org_id = $1 AND NOT removed ORDER BY email");
-    let rows: Vec<Row> = query_as(&sql).bind(org.get()).fetch_all(db).await?;
+/// Up to `limit` members by email, from just after `after`.
+pub async fn members(
+    db: &mut PgConnection,
+    org: OrgId,
+    after: Option<&str>,
+    limit: i64,
+) -> Result<Vec<Member>, sqlx::Error> {
+    let sql = format!(
+        "SELECT {COLUMNS} FROM ledger.member WHERE org_id = $1 AND NOT removed AND ($2::text IS NULL OR email > $2) \
+         ORDER BY email LIMIT $3"
+    );
+    let rows: Vec<Row> = query_as(&sql)
+        .bind(org.get())
+        .bind(after)
+        .bind(limit)
+        .fetch_all(db)
+        .await?;
     rows.into_iter().map(member).collect()
 }
 
