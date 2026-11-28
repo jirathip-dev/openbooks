@@ -1,11 +1,11 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use openbooks_core::{Email, OrgId, Refusal, UserId};
+use openbooks_core::{BookKind, Email, OrgId, Refusal, UserId};
 use sqlx::{PgConnection, query, query_as, query_scalar};
 
 use crate::refused;
 
-/// What an audit row is about: the company, a member by email, an account or terms by code, a role, the dimension kinds, or a value of the kind in a slot by its code or host reference.
+/// What an audit row is about: the company, a member by email, an account, terms or series by code, a role, the dimension kinds, a value of the kind in a slot by its code or host reference, or a book.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Record {
     Company,
@@ -16,6 +16,8 @@ pub enum Record {
     Value(u16, String),
     Synced(u16, String),
     Terms(String),
+    Book(BookKind),
+    Series(String),
 }
 
 impl Record {
@@ -30,6 +32,8 @@ impl Record {
             Self::Value(slot, code) => format!("value:{slot}:{code}"),
             Self::Synced(slot, host_ref) => format!("value:{slot}:host:{host_ref}"),
             Self::Terms(code) => format!("terms:{code}"),
+            Self::Book(kind) => format!("book:{}", kind.as_str()),
+            Self::Series(code) => format!("series:{code}"),
         }
     }
 }
@@ -150,6 +154,16 @@ pub async fn snapshot(db: &mut PgConnection, org: OrgId, record: &Record) -> Res
         ),
         Record::Terms(code) => (
             "SELECT (to_jsonb(t) - 'org_id')::text FROM ledger.terms t WHERE org_id = $1 AND code = $2".to_owned(),
+            Some(code.as_str()),
+            None,
+        ),
+        Record::Book(kind) => (
+            "SELECT (to_jsonb(b) - 'org_id')::text FROM ledger.book b WHERE org_id = $1 AND kind = $2".to_owned(),
+            Some(kind.as_str()),
+            None,
+        ),
+        Record::Series(code) => (
+            "SELECT (to_jsonb(s) - 'org_id')::text FROM ledger.series s WHERE org_id = $1 AND code = $2".to_owned(),
             Some(code.as_str()),
             None,
         ),

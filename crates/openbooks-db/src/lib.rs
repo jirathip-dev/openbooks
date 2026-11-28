@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod books;
 pub mod chart;
 pub mod events;
 pub mod members;

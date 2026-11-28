@@ -14,7 +14,7 @@ async fn dump(pool: &PgPool) -> Res<String> {
 
 #[sqlx::test(migrations = false)]
 async fn a_fresh_database_replays_to_the_same_dump_twice(pool: PgPool) -> Res<()> {
-    assert!(matches!(check(&pool).await, Err(SchemaError::Missing(v)) if v == [1, 2, 3, 4, 5, 6]));
+    assert!(matches!(check(&pool).await, Err(SchemaError::Missing(v)) if v == [1, 2, 3, 4, 5, 6, 7]));
     migrate(&pool).await?;
     migrate(&pool).await?;
     check(&pool).await?;

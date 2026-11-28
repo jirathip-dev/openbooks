@@ -9,6 +9,7 @@ use openbooks_db::events::{self, Claim};
 use openbooks_db::members::{self, Member};
 use sqlx::{PgConnection, PgPool};
 
+use crate::books::{ADD_SERIES, BOOKS_LIST, SAVE_BOOK, SERIES, SERIES_OFFSET};
 use crate::chart::{
     ACCOUNT_ROLES, ACCOUNTS, ADD_DIMENSION, DIMENSIONS, GIVE_ROLE, REMOVE_DIMENSION, RENAME_DIMENSION, REQUIRE,
     SAVE_ACCOUNT, SAVE_TERMS, SAVE_VALUE, SYNC_VALUE, TERMS, VALUES,
@@ -19,7 +20,7 @@ use crate::{Ask, Error, Hooks, Host, Kind, Mount, NoPack, Operation, Pack, Page,
 
 type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 
-/// The member, chart, dimension and terms operations, mounted under `books`.
+/// The member, chart, dimension, terms, book and series operations, mounted under `books`.
 pub const BOOKS: Mount = Mount {
     key: "books",
     operations: &[
@@ -42,6 +43,11 @@ pub const BOOKS: Mount = Mount {
         SYNC_VALUE,
         TERMS,
         SAVE_TERMS,
+        BOOKS_LIST,
+        SAVE_BOOK,
+        SERIES,
+        ADD_SERIES,
+        SERIES_OFFSET,
         TOOLS,
     ],
     serve: serve_books,
@@ -49,6 +55,9 @@ pub const BOOKS: Mount = Mount {
 
 fn serve_books(ask: Ask<'_>) -> Work<'_, Reply> {
     Box::pin(async move {
+        if ask.tool == BOOKS_LIST.name() || ask.tool == SERIES.name() {
+            return crate::books::serve(ask).await;
+        }
         if ask.tool != MEMBERS.name() {
             return crate::chart::serve(ask).await;
         }
@@ -177,12 +186,8 @@ impl<H: Host + 'static> Openbooks<H> {
         key: Option<IdempotencyKey>,
     ) -> Result<OrgId, Error> {
         let call = self.call()?;
-        let pack = self
-            .packs
-            .get(pack)
-            .ok_or_else(|| Error::NoSuchPack(pack.to_owned()))?
-            .name();
-        let (name, request) = (name.to_owned(), format!("company.create {base} {pack} {name}"));
+        let pack = Arc::clone(self.packs.get(pack).ok_or_else(|| Error::NoSuchPack(pack.to_owned()))?);
+        let (name, request) = (name.to_owned(), format!("company.create {base} {} {name}", pack.name()));
         let org = self
             .host
             .transact(move |db| {
@@ -190,7 +195,8 @@ impl<H: Host + 'static> Openbooks<H> {
                     if let Some(org) = call.replay(db, key.as_ref(), &request).await? {
                         return Ok(org);
                     }
-                    let org = members::create_org(db, &name, base, pack).await?;
+                    let org = members::create_org(db, &name, base, pack.name()).await?;
+                    crate::books::open(db, org, pack.as_ref()).await?;
                     members::add(db, org, &call.signed.email, Role::Owner).await?;
                     members::tie(db, org, &call.signed.email, call.signed.user).await?;
                     call.record(db, org, "company.create", &name, &Record::Company, None)

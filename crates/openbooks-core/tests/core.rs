@@ -209,6 +209,9 @@ fn values_at_the_edge_are_refused_with_their_reason() -> Result<(), Refusal> {
     let november = Month::new(2026, 11)?;
     assert!(november < Month::new(2026, 12)? && Month::new(2025, 12)? < november);
     assert_eq!((november.year(), november.month()), (2026, 11));
-    assert_ne!(BookKind::Receivables, BookKind::Payables);
+    for kind in BookKind::ALL {
+        assert_eq!(BookKind::parse(kind.as_str()), Ok(kind));
+    }
+    assert_eq!(BookKind::parse("receivables"), Err(Refusal::BadBookKind));
     Ok(())
 }

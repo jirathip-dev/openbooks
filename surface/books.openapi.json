@@ -1414,6 +1414,387 @@
         }
       }
     },
+    "/books/{org}/books": {
+      "get": {
+        "operationId": "books",
+        "description": "Lists the company's five books in its order.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "code",
+                          "order",
+                          "name"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "general",
+                              "receipts",
+                              "payments",
+                              "purchases",
+                              "sales"
+                            ],
+                            "description": "Which of the five books."
+                          },
+                          "code": {
+                            "type": "string",
+                            "description": "Its code."
+                          },
+                          "order": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0,
+                            "description": "Its place in the list."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/book.save": {
+      "post": {
+        "operationId": "book.save",
+        "description": "Gives a book its code, place and name; the numbers it gave keep theirs.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "code",
+                  "order",
+                  "name"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "receipts",
+                      "payments",
+                      "purchases",
+                      "sales"
+                    ],
+                    "description": "Which of the five books."
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "Its code, letters and digits, unique among the books."
+                  },
+                  "order": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "Its place in the list, from 1."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/series": {
+      "get": {
+        "operationId": "series",
+        "description": "Lists the company's number series by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "year_offset"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The series' code, the start of each number."
+                          },
+                          "book": {
+                            "type": "string",
+                            "enum": [
+                              "general",
+                              "receipts",
+                              "payments",
+                              "purchases",
+                              "sales"
+                            ],
+                            "description": "The book it numbers for; absent for a kind that posts nothing."
+                          },
+                          "document": {
+                            "type": "string",
+                            "description": "The document kind it is kept for; absent for its book's own."
+                          },
+                          "year_offset": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0,
+                            "description": "The years its numbers count ahead of the calendar's."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/series.add": {
+      "post": {
+        "operationId": "series.add",
+        "description": "Gives a document kind its own number series, in a book if the kind posts.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "The caller's key for this create: the same key and body get the first answer, another body a 409.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "document",
+                  "year_offset"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The series' code, letters and digits, unique among the series."
+                  },
+                  "document": {
+                    "type": "string",
+                    "description": "The document kind it numbers."
+                  },
+                  "book": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "receipts",
+                      "payments",
+                      "purchases",
+                      "sales"
+                    ],
+                    "description": "The book the kind posts in; absent for a kind that posts nothing."
+                  },
+                  "year_offset": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The years its numbers count ahead of the calendar's."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          },
+          "409": {
+            "description": "The key was sent with another body."
+          }
+        }
+      }
+    },
+    "/books/{org}/series.offset": {
+      "post": {
+        "operationId": "series.offset",
+        "description": "Sets the years a series' numbers count ahead, until it gives its first number.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "year_offset"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The series' code."
+                  },
+                  "year_offset": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The years its numbers count ahead of the calendar's."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
     "/books/{org}/tools": {
       "get": {
         "operationId": "tools",

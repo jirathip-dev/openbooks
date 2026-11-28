@@ -35,13 +35,15 @@ fn person(user: i64, address: &str) -> Res<SignedIn> {
     Ok(SignedIn::person(UserId::new(user)?, Email::new(address)?))
 }
 
-const READS: [&str; 6] = [
+const READS: [&str; 8] = [
     "members",
     "accounts",
     "account_roles",
     "dimensions",
     "dimension_values",
     "terms",
+    "books",
+    "series",
 ];
 
 fn reads_and(more: &[&'static str]) -> Vec<&'static str> {
