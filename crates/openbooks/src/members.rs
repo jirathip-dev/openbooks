@@ -13,7 +13,9 @@ use crate::chart::{
     ACCOUNT_ROLES, ACCOUNTS, ADD_DIMENSION, DIMENSIONS, GIVE_ROLE, REMOVE_DIMENSION, RENAME_DIMENSION, REQUIRE,
     SAVE_ACCOUNT, SAVE_TERMS, SAVE_VALUE, SYNC_VALUE, TERMS, VALUES,
 };
-use crate::{Error, Hooks, Host, Mount, NoPack, Operation, Pack, Page, SignedIn, Work};
+use crate::openapi::{Json, map, text};
+use crate::tools::{answer, listing};
+use crate::{Ask, Error, Hooks, Host, Kind, Mount, NoPack, Operation, Pack, Page, Reply, Serve, SignedIn, Tools, Work};
 
 type Packs = Arc<BTreeMap<&'static str, Arc<dyn Pack>>>;
 
@@ -40,8 +42,23 @@ pub const BOOKS: Mount = Mount {
         SYNC_VALUE,
         TERMS,
         SAVE_TERMS,
+        TOOLS,
     ],
+    serve: serve_books,
 };
+
+fn serve_books(ask: Ask<'_>) -> Work<'_, Reply> {
+    Box::pin(async move {
+        if ask.tool != MEMBERS.name() {
+            return crate::chart::serve(ask).await;
+        }
+        let (limit, after) = (i64::from(ask.rows()), ask.after()?);
+        let rows = members::members(ask.db, ask.org, after.as_deref(), limit).await?;
+        Ok(Reply::Rows(
+            rows.iter().map(|m| (member(m), m.email.as_str().to_owned())).collect(),
+        ))
+    })
+}
 
 pub(crate) const PAGE: u16 = 100;
 
@@ -73,10 +90,13 @@ const AUDIT: Operation = crate::closed_read!("audit", Word::Approve, "Lists the 
     after: Option<String> = "The cursor from the last page's next; absent for the first page.",
 } -> Page<AuditRow>);
 
+const TOOLS: Operation = crate::closed_read!("tools", Word::Read, "Lists the tools offered to the caller, as an MCP tool list in JSON; a tool is called at its own route.", {} -> String);
+
 /// The books, embedded in a host.
 pub struct Openbooks<H> {
     host: Arc<H>,
     hooks: Arc<dyn Hooks>,
+    tools: Arc<Tools>,
     pub(crate) packs: Packs,
 }
 
@@ -84,6 +104,7 @@ pub struct Openbooks<H> {
 pub struct Builder<H> {
     host: H,
     hooks: Arc<dyn Hooks>,
+    tools: Tools,
     packs: BTreeMap<&'static str, Arc<dyn Pack>>,
 }
 
@@ -94,6 +115,12 @@ impl<H: Host + 'static> Builder<H> {
             hooks: Arc::new(hooks),
             ..self
         }
+    }
+
+    /// Replaces the tools built from `BOOKS` alone, as with a pack's mount or another switch.
+    #[must_use]
+    pub fn tools(self, tools: Tools) -> Self {
+        Self { tools, ..self }
     }
 
     /// Offers a pack by its name to the companies of these books; `none` is offered already.
@@ -107,6 +134,7 @@ impl<H: Host + 'static> Builder<H> {
         Openbooks {
             host: Arc::new(self.host),
             hooks: self.hooks,
+            tools: Arc::new(self.tools),
             packs: Arc::new(self.packs),
         }
     }
@@ -122,6 +150,7 @@ impl<H: Host + 'static> Openbooks<H> {
         Builder {
             host,
             hooks: Arc::new(()),
+            tools: Tools::new(&[BOOKS]),
             packs: BTreeMap::from([(none.name(), none)]),
         }
     }
@@ -181,6 +210,44 @@ impl<H: Host + 'static> Openbooks<H> {
             Box::pin(async move {
                 let items = members::members(db, org, after.as_deref(), i64::from(PAGE) + 1).await?;
                 Ok(paged(items, |m| m.email.as_str().to_owned()))
+            })
+        })
+        .await
+    }
+
+    /// The tools offered to the person signed in, as the MCP tool list the local and remote servers serve.
+    pub async fn tools(&self, org: OrgId) -> Result<String, Error> {
+        Ok(listing(&self.offered(org).await?))
+    }
+
+    /// Calls an offered tool with its arguments by name through its mount's serve, answered in the agent view: 50 rows, a size cap, free text scrubbed.
+    pub async fn call_tool(&self, org: OrgId, tool: &str, arguments: &[(&str, &str)]) -> Result<String, Error> {
+        let offered = self.offered(org).await?;
+        let op = offered.into_iter().find(|op| op.name() == tool);
+        let found = op.and_then(|op| Some((op, self.tools.serve(&op)?)));
+        let (op, serve) = found.ok_or_else(|| Error::NoSuchTool(tool.to_owned()))?;
+        let arguments: Vec<(String, String)> = arguments
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        let detail = arguments
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let work = served(serve, org, op, arguments);
+        match op.kind() {
+            Kind::Write => self.write(org, op, Record::Company, detail, None, work).await,
+            Kind::Read | Kind::ClosedRead | Kind::Closed => self.read(org, op, work).await,
+        }
+    }
+
+    async fn offered(&self, org: OrgId) -> Result<Vec<Operation>, Error> {
+        let (tools, signed) = (Arc::clone(&self.tools), self.call()?.signed);
+        self.read(org, TOOLS, move |db| {
+            Box::pin(async move {
+                let member = members::member_by_user(db, org, signed.user).await?;
+                Ok(member.map_or_else(Vec::new, |m| tools.offered(m.role, &signed)))
             })
         })
         .await
@@ -342,6 +409,33 @@ impl<H: Host + 'static> Openbooks<H> {
     }
 }
 
+fn served(
+    serve: Serve,
+    org: OrgId,
+    op: Operation,
+    arguments: Vec<(String, String)>,
+) -> impl for<'c> FnOnce(&'c mut PgConnection) -> Work<'c, String> + Send + 'static {
+    move |db| {
+        Box::pin(async move {
+            let ask = Ask {
+                db,
+                org,
+                tool: op.name(),
+                arguments: &arguments,
+            };
+            Ok(answer(serve(ask).await?))
+        })
+    }
+}
+
+fn member(m: &Member) -> Json {
+    let json = map([("email", text(m.email.as_str())), ("role", text(m.role.as_str()))]);
+    match m.user {
+        Some(user) => json.with("user", Json::Num(user.get())),
+        None => json,
+    }
+}
+
 pub(crate) fn paged<T>(mut items: Vec<T>, cursor: impl Fn(&T) -> String) -> Page<T> {
     let more = items.len() > usize::from(PAGE);
     items.truncate(usize::from(PAGE));
@@ -362,6 +456,16 @@ impl Answer for () {
 
     fn load(_: Option<&str>) -> Result<Self, Error> {
         Ok(())
+    }
+}
+
+impl Answer for String {
+    fn store(&self) -> Option<String> {
+        Some(self.clone())
+    }
+
+    fn load(stored: Option<&str>) -> Result<Self, Error> {
+        Ok(stored.unwrap_or_default().to_owned())
     }
 }
 
