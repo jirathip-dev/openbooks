@@ -6,4 +6,4 @@ CREATE TABLE openbooks.pack_version (
     PRIMARY KEY (pack, version)
 );
 
-INSERT INTO openbooks.schema_version (version) VALUES (4);
+INSERT INTO openbooks.schema_version (version) VALUES (5);

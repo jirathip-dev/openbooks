@@ -81,12 +81,14 @@ impl Scope {
     }
 }
 
-/// Who makes the call for the person: they do, an assistant does, or the host's own code does, from its origin.
+/// Who makes the call for the person: they do, an assistant, the host's own code from its origin, a pack or a schedule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Via {
     Person,
     Assistant,
     Host(Origin),
+    Pack,
+    Schedule,
 }
 
 impl Via {
@@ -95,13 +97,15 @@ impl Via {
             Self::Person => "person",
             Self::Assistant => "assistant",
             Self::Host(_) => "host",
+            Self::Pack => "pack",
+            Self::Schedule => "schedule",
         }
     }
 
     pub fn origin(&self) -> Option<&Origin> {
         match self {
             Self::Host(origin) => Some(origin),
-            Self::Person | Self::Assistant => None,
+            Self::Person | Self::Assistant | Self::Pack | Self::Schedule => None,
         }
     }
 

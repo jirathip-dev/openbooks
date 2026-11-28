@@ -1,4 +1,6 @@
-use openbooks_core::{IdempotencyKey, OrgId, Origin, Refusal, UserId};
+use openbooks_core::{IdempotencyKey, OrgId, Origin, UserId};
+
+use crate::refused;
 use sqlx::{PgConnection, query, query_as, query_scalar};
 
 /// One change, written in the change's own transaction and handed to the host's hooks.
@@ -17,10 +19,6 @@ pub enum Claim {
     New,
     Answered(Option<String>),
     Reused,
-}
-
-fn refused(refusal: Refusal) -> sqlx::Error {
-    sqlx::Error::Decode(Box::new(refusal))
 }
 
 pub async fn write(

@@ -1,15 +1,19 @@
+use std::time::SystemTime;
+
 use openbooks_core::{Email, OrgId, Role, UserId, Word};
+use openbooks_db::audit::AuditRow;
 use openbooks_db::members::Member;
 
-/// How an operation reaches its callers: a read, a write offered as a tool, or a write closed to tools.
+/// How an operation reaches its callers: a read or a write offered as a tool, or a read or a write closed to tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Read,
     Write,
+    ClosedRead,
     Closed,
 }
 
-/// One route, made only by `read!`, `write!` or `closed!`, with the word it needs and the shapes it takes and answers.
+/// One route, made only by `read!`, `write!`, `closed_read!` or `closed!`, with the word it needs and the shapes it takes and answers.
 #[doc = "```compile_fail,E0451"]
 #[doc = "use openbooks::{Kind, Operation, Schema};"]
 #[doc = "let undeclared = Operation { kind: Kind::Read, name: \"x\", word: openbooks_core::Word::Read, about: \"x\", input: Vec::new, output: || Schema::Nothing, creates: false };"]
@@ -81,7 +85,11 @@ impl Operation {
     }
 
     pub fn is_tool(&self) -> bool {
-        self.kind != Kind::Closed
+        matches!(self.kind, Kind::Read | Kind::Write)
+    }
+
+    pub fn is_read(&self) -> bool {
+        matches!(self.kind, Kind::Read | Kind::ClosedRead)
     }
 }
 
@@ -99,6 +107,7 @@ pub enum Schema {
     Text,
     Email,
     Id,
+    Instant,
     Words(Vec<&'static str>),
     Object(Vec<Field>),
     Maybe(Box<Schema>),
@@ -145,6 +154,12 @@ impl Shape for String {
 impl Shape for Email {
     fn schema() -> Schema {
         Schema::Email
+    }
+}
+
+impl Shape for SystemTime {
+    fn schema() -> Schema {
+        Schema::Instant
     }
 }
 
@@ -212,6 +227,39 @@ impl Shape for Member {
     }
 }
 
+impl Shape for AuditRow {
+    fn schema() -> Schema {
+        let field = |name, about, schema| Field { name, about, schema };
+        let never = Option::<Never<String>>::schema;
+        Schema::Object(vec![
+            field("seq", "The row's place in the company's log.", i64::schema()),
+            field("id", "The id the host gave the change.", String::schema()),
+            field("at", "When the change was saved.", SystemTime::schema()),
+            field("user", "The person the change was made for.", UserId::schema()),
+            field(
+                "via",
+                "Who made it: person, assistant, host, pack or schedule.",
+                String::schema(),
+            ),
+            field(
+                "action",
+                "The kind of change, as the operation names it.",
+                String::schema(),
+            ),
+            field("record", "The record it changed, as its key.", String::schema()),
+            field("detail", "What the change said.", String::schema()),
+            field("before", "The record before, as JSON; absent if it is new.", never()),
+            field("after", "The record after, as JSON; absent if it is gone.", never()),
+        ])
+    }
+}
+
+impl Shape for i64 {
+    fn schema() -> Schema {
+        Schema::Id
+    }
+}
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! operation {
@@ -235,6 +283,11 @@ macro_rules! read {
 #[macro_export]
 macro_rules! write {
     ($($t:tt)*) => { $crate::operation!(Write, $($t)*) };
+}
+
+#[macro_export]
+macro_rules! closed_read {
+    ($($t:tt)*) => { $crate::operation!(ClosedRead, $($t)*) };
 }
 
 #[macro_export]
