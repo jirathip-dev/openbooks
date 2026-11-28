@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>openbooks · AR2611-0004</title>
+<link rel="stylesheet" href="openbooks.css">
+<style>
+.doc{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:calc(2 * var(--s4));align-items:start;max-width:1120px}
+.paper{background:#fff;color:#1c1c1c;border:1px solid var(--edge);box-shadow:0 2px 10px rgb(0 0 0 / .06);padding:40px 44px;font-size:12px}
+.paper .top{display:flex;justify-content:space-between;gap:var(--s4)}
+.paper .co b{font-size:15px}
+.paper .title{text-align:right}
+.paper .title b{font-size:18px;display:block}
+.paper .kv{display:grid;grid-template-columns:auto auto;gap:2px 12px;justify-content:end;margin-top:6px;text-align:right}
+.paper .kv span:nth-child(odd){color:#5e5e5e}
+.paper .to{margin:24px 0 16px;padding:10px 12px;border:1px solid #d0d0d0}
+.paper table th{border-bottom:1px solid #1c1c1c;color:#1c1c1c;font-size:11px}
+.paper table td{font-size:12px}
+.paper .tot{display:grid;grid-template-columns:1fr 140px;gap:4px 12px;margin-left:auto;width:320px;margin-top:10px}
+.paper .tot .g{border-top:1px solid #1c1c1c;padding-top:4px;font-weight:700}
+.paper .words{margin-top:12px;color:#5e5e5e}
+.paper .sign{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;text-align:center;color:#5e5e5e}
+.paper .sign div{border-top:1px solid #d0d0d0;padding-top:6px}
+.side .blk{padding:var(--s4);border-bottom:1px solid var(--line)}
+.side .blk:last-child{border-bottom:0}
+.side .v{font:600 24px var(--sans);font-variant-numeric:tabular-nums lining-nums}
+.side .acts{display:flex;flex-direction:column;gap:var(--s2)}
+.side .acts .row{display:flex;gap:var(--s2)}
+.side .acts .row .btn{flex:1}
+.side .acts .main{min-height:var(--hit)}
+.pay{display:grid;grid-template-columns:1fr auto;gap:2px var(--s2);font-size:var(--fs)}
+.entrycard{margin-top:var(--s4)}
+.entrycard .reveal{border-top:0}
+@media (max-width:599px){
+  .doc{display:flex;flex-direction:column-reverse;gap:var(--s3)}
+  .paper{padding:18px 16px;font-size:10px}
+  .paper .co b{font-size:12px}
+  .paper .title b{font-size:13px}
+  .paper table td,.paper table th{font-size:10px;padding:4px}
+  .paper .tot{width:100%}
+  .side .acts .row.wide-only{display:none}
+  .side{width:100%}
+  .paper .top{flex-direction:column}
+  .paper .title{text-align:left}
+  .paper .kv{justify-content:start;text-align:left}
+  .entry .pj{display:none}
+  .entry .pd{display:inline-flex !important;margin-top:2px}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-today" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11"/><path d="M2 6h12M5 1v3M11 1v3"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 16 16"><path d="M4 1h6l3 3v11H4z"/><path d="M10 1v3h3M6 8h5M6 11h5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3 3-5 6-5s6 2 6 5"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 16 16"><path d="M2 6l6-4 6 4M3 6v6M6 6v6M10 6v6M13 6v6M2 14h12"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 16 16"><path d="M2 5l6-3 6 3v7l-6 3-6-3zM2 5l6 3 6-3M8 8v7"/></symbol>
+  <symbol id="i-asset" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9"/><path d="M5 4V2h6v2"/></symbol>
+  <symbol id="i-rep" viewBox="0 0 16 16"><path d="M3 14V8M7 14V4M11 14V9M2 14h12"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+</svg>
+<div class="app">
+  <nav class="rail">
+    <div class="brand"><b>Nolla Works Co., Ltd.</b><span class="meta">Head office · THB · FY 2026</span></div>
+    <a href="#"><svg class="ico"><use href="#i-today"/></svg>Today<span class="ct">2</span></a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-user"/></svg>Contacts</a><a href="#"><svg class="ico"><use href="#i-stock"/></svg>Inventory</a><a href="#"><svg class="ico"><use href="#i-asset"/></svg>Assets</a><a href="#"><svg class="ico"><use href="#i-rep"/></svg>Reports</a>
+    <a href="#" class="gear"><svg class="ico"><use href="#i-gear"/></svg>Setup</a>
+  </nav>
+  <main>
+
+    <div class="head">
+      <div><div class="crumb">Documents › Invoices</div><h1 class="mono">AR2611-0004</h1></div>
+      <span class="st">Open</span>
+    </div>
+    <div class="doc">
+      <div>
+        <div class="paper">
+          <div class="top">
+            <div class="co"><b>Nolla Works Co., Ltd.</b><br>88 Kiln Lane, Unit 3, Old Mill Quarter, Tallow Vale 10000<br>Tax ID 0000000000017 · Head office</div>
+            <div class="title"><b>Tax invoice / Invoice</b>Original
+              <div class="kv"><span>No.</span><b class="mono">AR2611-0004</b><span>Date</span><span>13 Nov 2026</span><span>Due</span><span>13 Dec 2026</span><span>Order</span><span>SO2611-0003</span><span>Your PO</span><span>GSW-PO-7781</span></div>
+            </div>
+          </div>
+          <div class="to"><b>Granite Steel Works Co., Ltd.</b> · Head office<br>1200 Foundry Road, East Yard, Tallow Vale 20000 · Tax ID 0000000000025</div>
+          <table>
+            <thead><tr><th>#</th><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Cooling tower overhaul, stage 2 of 3<br><span style="color:#5e5e5e">Project P-2611-04, east plant</span></td><td class="num">1</td><td class="num">50,000.00</td><td class="num">50,000.00</td></tr>
+            </tbody>
+          </table>
+          <div class="tot">
+            <span>Subtotal</span><span class="num">50,000.00</span>
+            <span>VAT 7%</span><span class="num">3,500.00</span>
+            <span class="g">Total THB</span><span class="num g">53,500.00</span>
+          </div>
+          <div class="words">Fifty-three thousand five hundred baht only. Services: the customer withholds 3% (1,500.00) when paying.</div>
+          <div class="sign"><div>Received by</div><div>Authorised signature</div></div>
+        </div>
+
+        <div class="card entrycard">
+          <details class="reveal" open><summary>Hide entry<span class="meta">AR 05 Sales · posted 13 Nov 2026</span></summary>
+            <div class="in">
+              <table class="entry">
+                <thead><tr><th>Account</th><th class="pj">Project</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+                <tbody>
+                  <tr><td>1130 Trade receivables</td><td class="pj"></td><td class="num">53,500.00</td><td></td></tr>
+                  <tr><td class="cr">4110 Service income <span class="dim pd" style="display:none">P-2611-04</span></td><td class="pj"><span class="dim">P-2611-04</span></td><td></td><td class="num">50,000.00</td></tr>
+                  <tr><td class="cr">2155 Output VAT not yet due</td><td class="pj"></td><td></td><td class="num">3,500.00</td></tr>
+                </tbody>
+                <tfoot><tr><td></td><td class="pj"></td><td class="num">53,500.00</td><td class="num">53,500.00</td></tr></tfoot>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <aside class="card side">
+        <div class="blk">
+          <div class="meta">Open</div>
+          <div class="v">THB 53,500.00</div>
+          <div class="meta">Due in 17 days · Granite Steel Works</div>
+        </div>
+        <div class="blk acts">
+          <span class="btn main">Record payment</span>
+          <div class="row"><span class="btn">Print</span><span class="btn">Send</span></div>
+          <div class="row wide-only"><span class="btn">Credit note</span><span class="btn danger">Void</span></div>
+        </div>
+        <div class="blk">
+          <div class="meta" style="margin-bottom:4px">Payments</div>
+          <div class="pay"><span>Draft receipt · 26 Nov</span><span class="num">42,800.00</span><span class="meta">waiting for approval</span><span></span></div>
+        </div>
+        <div class="blk">
+          <div class="meta" style="margin-bottom:4px">From order</div>
+          <div class="pay"><span class="mono">SO2611-0003</span><span class="num">2 of 3 invoiced</span></div>
+        </div>
+        <div class="blk meta">Approved by Mai K., 13 Nov 10:12<br>Prepared by the assistant, confirmed by Mai K.</div>
+      </aside>
+    </div>
+
+  </main>
+</div>
+
+<nav class="tabbar"><a href="#"><svg class="ico"><use href="#i-today"/></svg>Today</a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-plus"/></svg>New</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-more"/></svg>More</a></nav>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>openbooks · New invoice</title>
+<link rel="stylesheet" href="openbooks.css">
+<style>
+.lines td{vertical-align:middle;padding:var(--s2)}
+.lines th:first-child,.lines td:first-child{padding-left:var(--s4)}
+.lines th:last-child,.lines td:last-child{padding-right:var(--s4)}
+.lines .input{min-height:36px}
+.add{display:flex;align-items:center;gap:6px;min-height:var(--hit);padding:0 var(--s4);border-bottom:1px solid var(--line)}
+.tot{display:grid;grid-template-columns:1fr 160px;gap:4px var(--s4);width:340px;margin-left:auto;padding:var(--s3) var(--s4)}
+.tot .g{font-weight:700;border-top:1px solid var(--fg);padding-top:4px;font-size:16px}
+.tot .m{color:var(--mute);font-size:var(--fs-meta)}
+@media (max-width:599px){
+  .lines thead{display:none}
+  .lines tr{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);padding:var(--s3)}
+  .lines td{padding:0;border:0}
+  .lines td:first-child{grid-column:1/-1;padding-left:0}
+  .lines td.amt{grid-column:1/-1;text-align:right;font-weight:600}
+  .lines td.x{display:none}
+  .lines tbody tr{border-bottom:1px solid var(--line)}
+  .add{padding:0 var(--s3)}
+  .tot{width:100%;padding:var(--s3)}
+  .reveal>summary .meta{display:none}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-today" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11"/><path d="M2 6h12M5 1v3M11 1v3"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 16 16"><path d="M4 1h6l3 3v11H4z"/><path d="M10 1v3h3M6 8h5M6 11h5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3 3-5 6-5s6 2 6 5"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 16 16"><path d="M2 6l6-4 6 4M3 6v6M6 6v6M10 6v6M13 6v6M2 14h12"/></symbol>
+  <symbol id="i-stock" viewBox="0 0 16 16"><path d="M2 5l6-3 6 3v7l-6 3-6-3zM2 5l6 3 6-3M8 8v7"/></symbol>
+  <symbol id="i-asset" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9"/><path d="M5 4V2h6v2"/></symbol>
+  <symbol id="i-rep" viewBox="0 0 16 16"><path d="M3 14V8M7 14V4M11 14V9M2 14h12"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+</svg>
+<div class="app">
+  <nav class="rail">
+    <div class="brand"><b>Nolla Works Co., Ltd.</b><span class="meta">Head office · THB · FY 2026</span></div>
+    <a href="#"><svg class="ico"><use href="#i-today"/></svg>Today<span class="ct">2</span></a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-user"/></svg>Contacts</a><a href="#"><svg class="ico"><use href="#i-stock"/></svg>Inventory</a><a href="#"><svg class="ico"><use href="#i-asset"/></svg>Assets</a><a href="#"><svg class="ico"><use href="#i-rep"/></svg>Reports</a>
+    <a href="#" class="gear"><svg class="ico"><use href="#i-gear"/></svg>Setup</a>
+  </nav>
+  <main>
+
+    <div class="head">
+      <div><div class="crumb">Documents › Invoices</div><h1>New invoice</h1></div>
+      <span class="st">Draft</span>
+    </div>
+    <div class="card form">
+      <div class="top" style="grid-template-columns:1fr">
+        <div class="field"><label>Customer</label><div class="pick">Hollin Resort Co., Ltd. <span class="meta">Branch 00001 · pays in 30 days</span></div></div>
+      </div>
+      <table class="lines">
+        <thead><tr><th>Item</th><th class="num" style="width:80px">Qty</th><th class="num" style="width:150px">Price</th><th class="num" style="width:140px">Amount</th><th style="width:28px"></th></tr></thead>
+        <tbody>
+          <tr><td><div class="input" style="border-color:var(--l)">Water treatment service, December</div></td><td><div class="input"><span class="num">1</span></div></td><td><div class="input"><span class="num">24,000.00</span></div></td><td class="num amt">24,000.00</td><td class="x"><svg class="ico mute"><use href="#i-x"/></svg></td></tr>
+        </tbody>
+      </table>
+      <div class="add"><svg class="ico"><use href="#i-plus"/></svg>Add line</div>
+      <div class="tot">
+        <span>Subtotal</span><span class="num">24,000.00</span>
+        <span>VAT 7%</span><span class="num">1,680.00</span>
+        <span class="g">Total THB</span><span class="num g">25,680.00</span>
+        <span class="m">They may withhold 3%</span><span class="num m">720.00</span>
+      </div>
+      <div class="defaults">
+        <span>Book <b>AR 05 Sales</b></span><span>Number <b>on approval</b></span><span>Date <b>26 Nov 2026</b></span><span>Due <b>26 Dec 2026</b></span><span><b>THB</b></span><span>VAT <b>7% on top</b></span>
+        <a class="link">Change</a>
+      </div>
+      <details class="reveal"><summary>More details<span class="meta">Project, cost centre, order, reference, notes, files</span></summary></details>
+      <details class="reveal"><summary>Show entry</summary></details>
+    </div>
+
+  </main>
+</div>
+<div class="actionbar"><span class="btn quiet">Preview</span><span class="sp"></span><span class="btn">Save draft</span><span class="btn main">Approve</span></div>
+<nav class="tabbar"><a href="#"><svg class="ico"><use href="#i-today"/></svg>Today</a><a href="#" aria-current="page"><svg class="ico"><use href="#i-docs"/></svg>Documents</a><a href="#"><svg class="ico"><use href="#i-plus"/></svg>New</a><a href="#"><svg class="ico"><use href="#i-bank"/></svg>Bank</a><a href="#"><svg class="ico"><use href="#i-more"/></svg>More</a></nav>
+</body>
+</html>
