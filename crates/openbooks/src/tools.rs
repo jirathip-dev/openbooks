@@ -1,4 +1,4 @@
-use openbooks_core::{OrgId, Role, Word};
+use openbooks_core::{OrgId, Refusal, Role, Word};
 use sqlx::PgConnection;
 
 use crate::api::{Mount, Operation, Schema};
@@ -23,6 +23,11 @@ pub struct Ask<'a> {
 impl Ask<'_> {
     pub fn argument(&self, name: &str) -> Option<&str> {
         self.arguments.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    }
+
+    /// The cursor `after` from the last page's next, read back from its hex; absent for the first page.
+    pub fn after(&self) -> Result<Option<String>, Error> {
+        self.argument("after").map(unhex).transpose()
     }
 
     /// The rows a page may fetch: the agent view's 50, and one more to tell there are more.
@@ -116,7 +121,7 @@ fn agent_page(mut items: Vec<(Json, String)>) -> String {
     let kept = fits.count().max(1).min(items.len());
     let more = more || kept < items.len();
     items.truncate(kept);
-    let next = items.last().filter(|_| more).map(|(_, cursor)| text(cursor));
+    let next = items.last().filter(|_| more).map(|(_, cursor)| text(&hex(cursor)));
     let mut page = map([("items", Json::List(items.into_iter().map(|(i, _)| scrub(i)).collect()))]);
     if let Some(next) = next {
         page = page.with("next", next);
@@ -134,4 +139,21 @@ fn scrub(json: Json) -> Json {
         Json::Map(pairs) => Json::Map(pairs.into_iter().map(|(k, v)| (k, scrub(v))).collect()),
         other @ (Json::Bool(_) | Json::Num(_)) => other,
     }
+}
+
+fn hex(cursor: &str) -> String {
+    let digit = |n: u8| char::from_digit(u32::from(n), 16).unwrap_or('0');
+    cursor.bytes().flat_map(|b| [digit(b >> 4), digit(b & 15)]).collect()
+}
+
+fn unhex(cursor: &str) -> Result<String, Error> {
+    let bad = || Error::from(Refusal::BadId);
+    let bytes = cursor.as_bytes().chunks(2).map(|pair| {
+        let pair = std::str::from_utf8(pair).map_err(|_| bad())?;
+        (pair.len() == 2)
+            .then(|| u8::from_str_radix(pair, 16).ok())
+            .flatten()
+            .ok_or_else(bad)
+    });
+    String::from_utf8(bytes.collect::<Result<_, _>>()?).map_err(|_| bad())
 }

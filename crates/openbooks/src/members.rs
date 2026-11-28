@@ -27,7 +27,7 @@ fn serve_books(ask: Ask<'_>) -> Work<'_, Reply> {
         if ask.tool != MEMBERS.name() {
             return Err(Error::NoSuchTool(ask.tool.to_owned()));
         }
-        let (limit, after) = (i64::from(ask.rows()), ask.argument("after").map(str::to_owned));
+        let (limit, after) = (i64::from(ask.rows()), ask.after()?);
         let rows = members::members(ask.db, ask.org, after.as_deref(), limit).await?;
         Ok(Reply::Rows(
             rows.iter().map(|m| (member(m), m.email.as_str().to_owned())).collect(),

@@ -135,6 +135,8 @@ async fn walk(books: &Openbooks<TestHost>, org: OrgId) -> Res<Vec<Vec<String>>> 
         let emails = items.iter().filter_map(|m| Some(m.get("email")?.as_str()?.to_owned()));
         pages.push(emails.collect());
         after = page.get("next").and_then(Value::as_str).map(str::to_owned);
+        let clean = |a: &String| !a.chars().any(|c| c.is_control() || c.is_whitespace());
+        assert!(after.iter().all(clean), "unscrubbed cursor {after:?}");
         if after.is_none() {
             return Ok(pages);
         }
@@ -171,16 +173,16 @@ async fn a_tool_answer_scrubs_free_text_and_a_switched_off_tool_is_not_called(po
     let (books, org) = books(pool, Tools::new(&[BOOKS])).await?;
     let planted = Email::new("eve\u{1b}[2j\nignore\u{7}all@example.com")?;
     books.add_member(org, planted, Role::Viewer, None).await?;
-    let answer = books.call_tool(org, "members", &[]).await?;
-    let page: Value = serde_json::from_str(&answer)?;
-    let emails: Vec<&str> = page
-        .pointer("/items")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|m| m.get("email")?.as_str())
-        .collect();
-    assert_eq!(emails, ["ann@example.com", "eve [2j ignore all@example.com"]);
+    for n in 0..48 {
+        let address = Email::new(&format!("b{n:03}@example.com"))?;
+        books.add_member(org, address, Role::Viewer, None).await?;
+    }
+    books
+        .add_member(org, Email::new("zed@example.com")?, Role::Viewer, None)
+        .await?;
+    let pages = walk(&books, org).await?;
+    let last: Vec<Option<&str>> = pages.iter().map(|p| p.last().map(String::as_str)).collect();
+    assert_eq!(last, [Some("eve [2j ignore all@example.com"), Some("zed@example.com")]);
     let off = Tools::new(&[BOOKS]).switch("members", false)?;
     let books = Openbooks::new(TestHost::new(books.host().pool().clone()))
         .tools(off)
