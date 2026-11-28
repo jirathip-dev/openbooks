@@ -35,6 +35,19 @@ fn person(user: i64, address: &str) -> Res<SignedIn> {
     Ok(SignedIn::person(UserId::new(user)?, Email::new(address)?))
 }
 
+const READS: [&str; 6] = [
+    "members",
+    "accounts",
+    "account_roles",
+    "dimensions",
+    "dimension_values",
+    "terms",
+];
+
+fn reads_and(more: &[&'static str]) -> Vec<&'static str> {
+    [READS.as_slice(), more].concat()
+}
+
 fn names(tools: &Tools, role: Role, signed: &SignedIn) -> Vec<&'static str> {
     tools.offered(role, signed).iter().map(Operation::name).collect()
 }
@@ -42,13 +55,13 @@ fn names(tools: &Tools, role: Role, signed: &SignedIn) -> Vec<&'static str> {
 #[test]
 fn a_mounted_route_becomes_a_tool_with_no_registry_change_and_a_never_field_never_does() -> Res<()> {
     let owner = person(1, "ann@example.com")?;
-    assert_eq!(names(&Tools::new(&[BOOKS]), Role::Owner, &owner), ["members"]);
+    assert_eq!(names(&Tools::new(&[BOOKS]), Role::Owner, &owner), READS);
     let tools = Tools::new(&[BOOKS, PACK]);
-    assert_eq!(names(&tools, Role::Owner, &owner), ["members", "propose", "approve"]);
+    assert_eq!(names(&tools, Role::Owner, &owner), reads_and(&["propose", "approve"]));
     let all = tools.switch("report", true)?;
     assert_eq!(
         names(&all, Role::Owner, &owner),
-        ["members", "propose", "approve", "report"]
+        reads_and(&["propose", "approve", "report"])
     );
     assert!(matches!(all.switch("leak", true), Err(Error::NoSuchTool(name)) if name == "leak"));
     Ok(())
@@ -59,14 +72,17 @@ fn a_tool_is_offered_only_to_a_role_with_its_word_so_a_viewer_gets_no_propose() 
     let tools = Tools::new(&[BOOKS, PACK]).switch("report", true)?;
     let signed = person(1, "ann@example.com")?;
     let offered = |role| names(&tools, role, &signed);
-    assert_eq!(offered(Role::Viewer), ["members", "report"]);
-    assert_eq!(offered(Role::Staff), ["members", "propose"]);
-    assert_eq!(offered(Role::Accountant), ["members", "propose", "approve", "report"]);
+    assert_eq!(offered(Role::Viewer), reads_and(&["report"]));
+    assert_eq!(offered(Role::Staff), reads_and(&["propose"]));
+    assert_eq!(offered(Role::Accountant), reads_and(&["propose", "approve", "report"]));
     let assistant = SignedIn {
         via: Via::Assistant,
         ..signed.clone()
     };
-    assert_eq!(names(&tools, Role::Owner, &assistant), ["members", "propose", "report"]);
+    assert_eq!(
+        names(&tools, Role::Owner, &assistant),
+        reads_and(&["propose", "report"])
+    );
     Ok(())
 }
 
@@ -74,9 +90,12 @@ fn a_tool_is_offered_only_to_a_role_with_its_word_so_a_viewer_gets_no_propose() 
 fn company_wide_reports_start_off_and_a_switch_turns_one_on_or_a_tool_off() -> Res<()> {
     let viewer = person(1, "vic@example.com")?;
     let tools = Tools::new(&[BOOKS, PACK]);
-    assert_eq!(names(&tools, Role::Viewer, &viewer), ["members"]);
+    assert_eq!(names(&tools, Role::Viewer, &viewer), READS);
     let tools = tools.switch("report", true)?.switch("members", false)?;
-    assert_eq!(names(&tools, Role::Viewer, &viewer), ["report"]);
+    assert_eq!(
+        names(&tools, Role::Viewer, &viewer),
+        [&READS[1..], &["report"]].concat()
+    );
     assert!(matches!(tools.switch("nothing", true), Err(Error::NoSuchTool(_))));
     Ok(())
 }
@@ -106,10 +125,17 @@ async fn the_tool_list_names_what_the_callers_role_may_call_with_its_input_schem
     books
         .add_member(org, Email::new("vic@example.com")?, Role::Viewer, None)
         .await?;
-    assert_eq!(listed(&books.tools(org).await?)?, ["members", "propose", "approve"]);
+    assert_eq!(listed(&books.tools(org).await?)?, reads_and(&["propose", "approve"]));
     books.host().sign_in(person(2, "vic@example.com")?);
     let json = books.tools(org).await?;
-    assert_eq!(listed(&json)?, ["members"]);
+    assert_eq!(listed(&json)?, READS);
+    let kinds = books.call_tool(org, "dimensions", &[]).await?;
+    assert_eq!(
+        serde_json::from_str::<Value>(&kinds)?,
+        serde_json::json!([{"slot": 1, "name": "Project"}])
+    );
+    let roles = books.call_tool(org, "account_roles", &[("on", "2026-02-30")]).await;
+    assert!(matches!(roles, Err(Error::Refused(_))), "{roles:?}");
     let tools: Value = serde_json::from_str(&json)?;
     let after = tools.pointer("/tools/0/inputSchema/properties/after/type");
     assert_eq!(after, Some(&Value::from("string")));

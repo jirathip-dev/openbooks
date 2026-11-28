@@ -77,6 +77,13 @@ fn schema(shape: &Schema) -> Json {
     match shape {
         Schema::Nothing => map([]),
         Schema::Text => map([("type", text("string"))]),
+        Schema::Flag => map([("type", text("boolean"))]),
+        Schema::Whole => map([
+            ("type", text("integer")),
+            ("format", text("int32")),
+            ("minimum", Json::Num(0)),
+        ]),
+        Schema::Day => map([("type", text("string")), ("format", text("date"))]),
         Schema::Email => map([("type", text("string")), ("format", text("email"))]),
         Schema::Instant => map([("type", text("string")), ("format", text("date-time"))]),
         Schema::Id => map([

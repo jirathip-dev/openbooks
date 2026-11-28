@@ -2,8 +2,11 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use openbooks::testing::TestHost;
-use openbooks::{AuditRow, BOOKS, Error, Filter, Host, Member, Openbooks, Operation, Record, Scope, SignedIn, Via};
-use openbooks_core::{Currency, Email, OrgId, Origin, ProjectId, Refusal, Role, UserId, Word};
+use openbooks::{
+    Account, AuditRow, BOOKS, DimensionValue, Error, Filter, Host, Member, Openbooks, Operation, Record, Scope,
+    SignedIn, Terms, Via,
+};
+use openbooks_core::{AccountType, Currency, Date, Email, OrgId, Origin, ProjectId, Refusal, Role, UserId, Word};
 use serde_json::{Value, json};
 use sqlx::{PgPool, query_scalar, raw_sql};
 
@@ -67,7 +70,16 @@ async fn a_write_under_a_host_that_rolls_back_leaves_no_row(pool: PgPool) -> Res
 
 #[sqlx::test(migrations = false)]
 async fn each_operation_is_declared_with_its_word_and_each_role_gets_what_its_words_allow(pool: PgPool) -> Res<()> {
-    let words = [Word::Read, Word::Own, Word::Own, Word::Own, Word::Approve, Word::Read];
+    let (read, approve) = (Word::Read, Word::Approve);
+    let chart = [
+        read, approve, approve, read, approve, read, approve, approve, approve, read, approve, approve,
+    ];
+    let words = [
+        [read, Word::Own, Word::Own, Word::Own, approve].as_slice(),
+        &chart,
+        &[read, approve, read],
+    ]
+    .concat();
     assert_eq!(BOOKS.operations.iter().map(Operation::word).collect::<Vec<_>>(), words);
     let (books, org) = books(pool).await?;
     for (n, role) in (2..).zip(Role::ALL) {
@@ -239,18 +251,140 @@ fn wes(role: &str, removed: bool) -> Value {
     json!({"email": "wes@example.com", "user_id": null, "role": role, "removed": removed})
 }
 
-async fn call(books: &Openbooks<TestHost>, org: OrgId, op: &Operation) -> Res<(Option<Value>, Option<Value>)> {
+type Seen = (String, Option<Value>, Option<Value>);
+
+async fn call(books: &Openbooks<TestHost>, org: OrgId, op: &Operation) -> Res<Seen> {
     let address = email("wes@example.com")?;
+    let record = "member:wes@example.com".to_owned();
     match op.name() {
         "member.add" => books.add_member(org, address, Role::Staff, None).await?,
         "member.role" => books.change_role(org, address, Role::Viewer).await?,
         "member.remove" => books.remove_member(org, address).await?,
-        other => return Err(format!("{other} is a declared write this walk does not call").into()),
+        _ => return set_up(books, org, op).await,
     }
     Ok(match op.name() {
-        "member.add" => (None, Some(wes("staff", false))),
-        "member.role" => (Some(wes("staff", false)), Some(wes("viewer", false))),
-        _ => (Some(wes("viewer", false)), Some(wes("viewer", true))),
+        "member.add" => (record, None, Some(wes("staff", false))),
+        "member.role" => (record, Some(wes("staff", false)), Some(wes("viewer", false))),
+        _ => (record, Some(wes("viewer", false)), Some(wes("viewer", true))),
+    })
+}
+
+fn cash(requires: &Value) -> Value {
+    json!({"code": "1000", "name": "Cash", "type": "asset", "parent_id": null, "active": true, "currency": null, "requires": requires})
+}
+
+fn kinds(names: &[&str]) -> Value {
+    Value::Array(
+        (1..)
+            .zip(names)
+            .map(|(slot, name)| json!({"slot": slot, "name": name}))
+            .collect(),
+    )
+}
+
+fn value(code: &str, name: &str, host_ref: &Value) -> Value {
+    json!({"code": code, "name": name, "active": true, "host_ref": host_ref})
+}
+
+async fn set_up(books: &Openbooks<TestHost>, org: OrgId, op: &Operation) -> Res<Seen> {
+    let text = str::to_owned;
+    let day = Date::new(2026, 1, 1)?;
+    let (record, before, after) = match op.name() {
+        "account.save" => {
+            let cash_account = Account {
+                code: text("1000"),
+                name: text("Cash"),
+                account_type: AccountType::Asset,
+                parent: None,
+                active: true,
+                currency: None,
+            };
+            books.save_account(org, cash_account).await?;
+            ("account:1000", None, Some(cash(&Value::Null)))
+        }
+        "account.require" => {
+            books.require_dimension(org, text("1000"), 1, true).await?;
+            ("account:1000", Some(cash(&Value::Null)), Some(cash(&json!([1]))))
+        }
+        "account.role" => {
+            books.give_role(org, text("receivables"), day, text("1000")).await?;
+            (
+                "role:receivables",
+                None,
+                Some(json!([{"from": "2026-01-01", "account": "1000"}])),
+            )
+        }
+        _ => return dimensions(books, org, op).await,
+    };
+    Ok((record.to_owned(), before, after))
+}
+
+async fn dimensions(books: &Openbooks<TestHost>, org: OrgId, op: &Operation) -> Res<Seen> {
+    let text = str::to_owned;
+    let (record, before, after) = match op.name() {
+        "dimension.add" => {
+            books.add_dimension(org, text("Cost centre"), None).await?;
+            (
+                "dimensions",
+                Some(kinds(&["Project"])),
+                Some(kinds(&["Project", "Cost centre"])),
+            )
+        }
+        "dimension.rename" => {
+            books.rename_dimension(org, 2, text("Department")).await?;
+            (
+                "dimensions",
+                Some(kinds(&["Project", "Cost centre"])),
+                Some(kinds(&["Project", "Department"])),
+            )
+        }
+        "dimension.remove" => {
+            books.remove_dimension(org, 2).await?;
+            (
+                "dimensions",
+                Some(kinds(&["Project", "Department"])),
+                Some(kinds(&["Project"])),
+            )
+        }
+        "dimension_value.save" => {
+            books.save_value(org, 1, text("P1"), text("Bridge"), true).await?;
+            ("value:1:P1", None, Some(value("P1", "Bridge", &Value::Null)))
+        }
+        "dimension_value.sync" => {
+            let synced = DimensionValue {
+                code: text("P7"),
+                name: text("Tunnel"),
+                active: true,
+                host_ref: None,
+            };
+            books.sync_value(org, 1, text("job-7"), synced).await?;
+            ("value:1:host:job-7", None, Some(value("P7", "Tunnel", &json!("job-7"))))
+        }
+        "terms.save" => {
+            let net = Terms {
+                code: text("NET"),
+                name: text("Net"),
+                days: 30,
+                active: true,
+            };
+            books.save_terms(org, net).await?;
+            (
+                "terms:NET",
+                None,
+                Some(json!({"code": "NET", "name": "Net", "days": 30, "active": true})),
+            )
+        }
+        other => return Err(format!("{other} is a declared write this walk does not call").into()),
+    };
+    Ok((record.to_owned(), before, after))
+}
+
+fn without_ids(snapshot: Option<Value>) -> Option<Value> {
+    snapshot.map(|mut snapshot| {
+        if let Some(fields) = snapshot.as_object_mut() {
+            fields.retain(|key, _| !key.ends_with("_id") || key == "parent_id" || key == "user_id");
+        }
+        snapshot
     })
 }
 
@@ -271,10 +405,10 @@ async fn every_declared_write_leaves_exactly_one_audit_row_with_the_record_befor
         (Some(&json!("Acme")), Some(&json!("XTS")))
     );
     let writes: Vec<&Operation> = BOOKS.operations.iter().filter(|op| !op.is_read()).collect();
-    assert_eq!(writes.len(), 3);
+    assert_eq!(writes.len(), 12);
     for op in writes {
         let seen = log(&books, org, Filter::default()).await?.len();
-        let (before, after) = call(&books, org, op).await?;
+        let (record, before, after) = call(&books, org, op).await?;
         let rows = log(&books, org, Filter::default()).await?;
         assert_eq!(
             rows.len(),
@@ -284,11 +418,12 @@ async fn every_declared_write_leaves_exactly_one_audit_row_with_the_record_befor
             rows.len() - seen
         );
         let row = rows.last().ok_or("no row")?;
-        assert_eq!(
-            (row.action.as_str(), row.record.as_str()),
-            (op.name(), "member:wes@example.com")
+        assert_eq!((row.action.as_str(), row.record.as_str()), (op.name(), record.as_str()));
+        let seen = (
+            without_ids(json(row.before.as_ref())?),
+            without_ids(json(row.after.as_ref())?),
         );
-        assert_eq!((json(row.before.as_ref())?, json(row.after.as_ref())?), (before, after));
+        assert_eq!(seen, (before, after), "{}", op.name());
     }
     books
         .add_member(org, email("joe@example.com")?, Role::Staff, None)
@@ -301,7 +436,7 @@ async fn every_declared_write_leaves_exactly_one_audit_row_with_the_record_befor
     let joined = rows.last().ok_or("no row")?;
     assert_eq!(
         (rows.len(), joined.action.as_str(), joined.user.get()),
-        (6, "member.join", 5)
+        (15, "member.join", 5)
     );
     let tied = |user| json!({"email": "joe@example.com", "user_id": user, "role": "staff", "removed": false});
     assert_eq!(

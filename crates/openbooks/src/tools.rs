@@ -88,7 +88,15 @@ fn reaches_never(schema: &Schema) -> bool {
         Schema::Never(_) => true,
         Schema::Maybe(inner) | Schema::Page(inner) => reaches_never(inner),
         Schema::Object(fields) => fields.iter().any(|f| reaches_never(&f.schema)),
-        Schema::Nothing | Schema::Text | Schema::Email | Schema::Id | Schema::Instant | Schema::Words(_) => false,
+        Schema::Nothing
+        | Schema::Text
+        | Schema::Flag
+        | Schema::Whole
+        | Schema::Day
+        | Schema::Email
+        | Schema::Id
+        | Schema::Instant
+        | Schema::Words(_) => false,
     }
 }
 

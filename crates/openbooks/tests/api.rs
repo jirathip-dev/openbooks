@@ -162,11 +162,25 @@ fn the_books_document_passes_the_shape_check_and_is_the_one_under_surface() -> R
     assert_eq!(
         declared,
         [
+            ("account.require", "approve", false),
+            ("account.role", "approve", false),
+            ("account.save", "approve", false),
+            ("account_roles", "read", true),
+            ("accounts", "read", true),
             ("audit", "approve", false),
+            ("dimension.add", "approve", false),
+            ("dimension.remove", "approve", false),
+            ("dimension.rename", "approve", false),
+            ("dimension_value.save", "approve", false),
+            ("dimension_value.sync", "approve", false),
+            ("dimension_values", "read", true),
+            ("dimensions", "read", true),
             ("member.add", "own", false),
             ("member.remove", "own", false),
             ("member.role", "own", false),
             ("members", "read", true),
+            ("terms", "read", true),
+            ("terms.save", "approve", false),
             ("tools", "read", false)
         ]
     );

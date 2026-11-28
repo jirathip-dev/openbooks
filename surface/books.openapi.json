@@ -438,6 +438,982 @@
         }
       }
     },
+    "/books/{org}/accounts": {
+      "get": {
+        "operationId": "accounts",
+        "description": "Lists the chart's accounts by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "name",
+                          "account_type",
+                          "active"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The account's code."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          },
+                          "account_type": {
+                            "type": "string",
+                            "enum": [
+                              "asset",
+                              "liability",
+                              "equity",
+                              "income",
+                              "expense"
+                            ],
+                            "description": "What it holds."
+                          },
+                          "parent": {
+                            "type": "string",
+                            "description": "The code of the account it sits under."
+                          },
+                          "active": {
+                            "type": "boolean",
+                            "description": "Whether new lines may use it."
+                          },
+                          "currency": {
+                            "type": "string",
+                            "description": "The one currency it is kept in."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/account.save": {
+      "post": {
+        "operationId": "account.save",
+        "description": "Adds an account to the chart, or changes the one with its code; one with postings keeps its type.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "name",
+                  "account_type",
+                  "active"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The account's code, unique in the chart."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "account_type": {
+                    "type": "string",
+                    "enum": [
+                      "asset",
+                      "liability",
+                      "equity",
+                      "income",
+                      "expense"
+                    ],
+                    "description": "What it holds."
+                  },
+                  "parent": {
+                    "type": "string",
+                    "description": "The code of the account it sits under; absent at the top."
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "description": "Whether new lines may use it."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "The one currency it is kept in, by code; absent for any."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/account.require": {
+      "post": {
+        "operationId": "account.require",
+        "description": "Says whether each line on an account needs a value of a dimension kind.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "account",
+                  "slot",
+                  "required"
+                ],
+                "properties": {
+                  "account": {
+                    "type": "string",
+                    "description": "The account's code."
+                  },
+                  "slot": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The kind's slot, 1 to 3."
+                  },
+                  "required": {
+                    "type": "boolean",
+                    "description": "Whether a line needs a value of it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/account_roles": {
+      "get": {
+        "operationId": "account_roles",
+        "description": "Lists which account plays each role on a day.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "on",
+            "in": "query",
+            "required": true,
+            "description": "The day.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "role",
+                          "from",
+                          "account"
+                        ],
+                        "properties": {
+                          "role": {
+                            "type": "string",
+                            "description": "The role's key."
+                          },
+                          "from": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "The day the account took it on."
+                          },
+                          "account": {
+                            "type": "string",
+                            "description": "The account's code."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/account.role": {
+      "post": {
+        "operationId": "account.role",
+        "description": "Gives a role the core or the company's pack declares to an account from a day on.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "role",
+                  "from",
+                  "account"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "description": "The role's key."
+                  },
+                  "from": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The first day the account plays it."
+                  },
+                  "account": {
+                    "type": "string",
+                    "description": "The account's code."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/dimensions": {
+      "get": {
+        "operationId": "dimensions",
+        "description": "Lists the company's dimension kinds by slot: Project first, then up to two more.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "slot",
+                          "name"
+                        ],
+                        "properties": {
+                          "slot": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0,
+                            "description": "The kind's slot, 1 to 3."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/dimension.add": {
+      "post": {
+        "operationId": "dimension.add",
+        "description": "Turns on a dimension kind in the next free slot; a company has at most three.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "The caller's key for this create: the same key and body get the first answer, another body a 409.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Its name: Cost centre, Department, or one of the company's own."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          },
+          "409": {
+            "description": "The key was sent with another body."
+          }
+        }
+      }
+    },
+    "/books/{org}/dimension.rename": {
+      "post": {
+        "operationId": "dimension.rename",
+        "description": "Renames a dimension kind the company turned on.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slot",
+                  "name"
+                ],
+                "properties": {
+                  "slot": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The kind's slot, 2 or 3."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its new name."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/dimension.remove": {
+      "post": {
+        "operationId": "dimension.remove",
+        "description": "Turns off a dimension kind no posted line carries a value of.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slot"
+                ],
+                "properties": {
+                  "slot": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The kind's slot, 2 or 3."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/dimension_values": {
+      "get": {
+        "operationId": "dimension_values",
+        "description": "Lists a dimension kind's values by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "slot",
+            "in": "query",
+            "required": true,
+            "description": "The kind's slot, 1 to 3.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "name",
+                          "active"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The value's code."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          },
+                          "active": {
+                            "type": "boolean",
+                            "description": "Whether new lines may carry it."
+                          },
+                          "host_ref": {
+                            "type": "string",
+                            "description": "The host's reference, when the host keeps it."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/dimension_value.save": {
+      "post": {
+        "operationId": "dimension_value.save",
+        "description": "Adds a value to a dimension kind, or changes the one with its code unless the host keeps it.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slot",
+                  "code",
+                  "name",
+                  "active"
+                ],
+                "properties": {
+                  "slot": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The kind's slot, 1 to 3."
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "The value's code, unique in its kind."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "description": "Whether new lines may carry it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/dimension_value.sync": {
+      "post": {
+        "operationId": "dimension_value.sync",
+        "description": "Keeps a value of a dimension kind in step with the host's own record, by its reference.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slot",
+                  "host_ref",
+                  "code",
+                  "name",
+                  "active"
+                ],
+                "properties": {
+                  "slot": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "The kind's slot, 1 to 3."
+                  },
+                  "host_ref": {
+                    "type": "string",
+                    "description": "The host's reference for the value."
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "The value's code, unique in its kind."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "description": "Whether new lines may carry it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
+    "/books/{org}/terms": {
+      "get": {
+        "operationId": "terms",
+        "description": "Lists the company's payment terms by code, a page at a time.",
+        "x-openbooks-word": "read",
+        "x-openbooks-tool": true,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The cursor from the last page's next; absent for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "x-openbooks-page": true,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "code",
+                          "name",
+                          "days",
+                          "active"
+                        ],
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "description": "The term's code."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Its name."
+                          },
+                          "days": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0,
+                            "description": "How many days after the document's date it is due."
+                          },
+                          "active": {
+                            "type": "boolean",
+                            "description": "Whether new documents may use it."
+                          }
+                        }
+                      },
+                      "description": "This page's items, in order."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The cursor to pass as after for the next page; absent on the last."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{org}/terms.save": {
+      "post": {
+        "operationId": "terms.save",
+        "description": "Adds a payment term, or changes the one with its code.",
+        "x-openbooks-word": "approve",
+        "x-openbooks-tool": false,
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "description": "The company the operation is on.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "What to write.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "name",
+                  "days",
+                  "active"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The term's code."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "days": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "description": "How many days after the document's date it is due."
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "description": "Whether new documents may use it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done, with nothing to answer."
+          }
+        }
+      }
+    },
     "/books/{org}/tools": {
       "get": {
         "operationId": "tools",
