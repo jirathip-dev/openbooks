@@ -110,6 +110,18 @@ reason = "nothing names a country outside packs/: a country's words, taxes and f
 comments = true
 ignore_case = true
 
+[[ban]]
+pattern = "f32"
+paths = ["crates/openbooks-core/**"]
+reason = "no float in the core: money, rates and quantities are whole numbers in fixed point"
+comments = true
+
+[[ban]]
+pattern = "f64"
+paths = ["crates/openbooks-core/**"]
+reason = "no float in the core: money, rates and quantities are whole numbers in fixed point"
+comments = true
+
 [[size]]
 paths = ["crates/*/src/**/*.rs", "crates/*/tests/**/*.rs", "packs/*/src/**/*.rs"]
 max_file_lines = 600
